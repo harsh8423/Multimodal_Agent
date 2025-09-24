@@ -64,12 +64,27 @@ from googleapiclient.discovery import build
 SERVICE_ACCOUNT_FILE = "./backend/tools/service_account.json"  # Path to your service account JSON
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Authenticate once and reuse
-creds = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
-)
-service = build("sheets", "v4", credentials=creds)
-sheet_service = service.spreadsheets()
+# Initialize service variables
+creds = None
+service = None
+sheet_service = None
+
+def _initialize_google_sheets_service():
+    """Initialize Google Sheets service if service account file exists."""
+    global creds, service, sheet_service
+    
+    if creds is None and os.path.exists(SERVICE_ACCOUNT_FILE):
+        try:
+            creds = service_account.Credentials.from_service_account_file(
+                SERVICE_ACCOUNT_FILE, scopes=SCOPES
+            )
+            service = build("sheets", "v4", credentials=creds)
+            sheet_service = service.spreadsheets()
+        except Exception as e:
+            print(f"Warning: Failed to initialize Google Sheets service: {e}")
+            creds = None
+            service = None
+            sheet_service = None
 
 
 # ======================
@@ -81,6 +96,11 @@ def google_sheet_append(spreadsheet_id, sheet_name, row_data: dict):
     - If new columns are provided in row_data, they will be auto-created.
     - row_data: dict where keys=column names, values=cell values
     """
+    # Initialize service if needed
+    _initialize_google_sheets_service()
+    
+    if sheet_service is None:
+        raise Exception("Google Sheets service not available. Please ensure service_account.json exists.")
 
     # Fetch the current header row
     result = sheet_service.values().get(
@@ -134,6 +154,11 @@ def google_sheet_update(spreadsheet_id, sheet_name, match_column, match_value, u
     Example:
       update_cell(spreadsheet_id, "Sheet1", "Name", "Harsh", "Status", "Active")
     """
+    # Initialize service if needed
+    _initialize_google_sheets_service()
+    
+    if sheet_service is None:
+        raise Exception("Google Sheets service not available. Please ensure service_account.json exists.")
 
     # Get all data
     result = sheet_service.values().get(

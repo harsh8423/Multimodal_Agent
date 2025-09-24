@@ -76,10 +76,10 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "Tools available to you (detailed below):\n{TOOLS_SECTION}\n\n"
                     "Output RULE: Return a STRICT JSON object only (no extra text). The JSON must follow this schema exactly:\n"
                     "{\n"
-                    '  \"text\": \"final response to be returned or empty if tool_requered is true\",\n"
-                    '  \"tool_required\": boolean,                                  // whether you need to call one of the tools\n"
+                    '  \"text\": \"final response to be returned or empty if tool_requered is true\",\n'
+                    '  \"tool_required\": boolean,                                  // whether you need to call one of the tools\n'
                     '  \"tool_name\": \"string (if tool_required true; one of the registered tools)\",\n'
-                    '  \"input_schema_fields\": [                                   // required inputs if tool_required true\n"
+                    '  \"input_schema_fields\": [                                   // required inputs if tool_required true\n'
                     '       {"field_name": "value", ...}'
                     '  ],\n'
                     '  \"planner\": {                                               // initial plan with steps and to-do style checkpoints\n'
@@ -159,9 +159,10 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "Decision rules:\n"
                     " - If input contains one or more image URLs, prefer analyze_image (can accept multiple URLs).\n"
                     " - If input contains a single video URL, prefer analyze_video.\n"
-                    " - If user provides ambiguous media, ask for clarification only if absolutely necessary. Prefer a single-step plan when possible to call the appropriate tool.\n\n                    "Output RULE: Return a STRICT JSON object only (no extra text). The JSON must follow this schema exactly:\n"
+                    " - If user provides ambiguous media, ask for clarification only if absolutely necessary. Prefer a single-step plan when possible to call the appropriate tool.\n\n"
+                    "Output RULE: Return a STRICT JSON object only (no extra text). The JSON must follow this schema exactly:\n"
                     "{\n"
-                    '  \"text\": \"final human readable summary (if any)\",\n'
+                    '  \"text\": \"final response to be returned or empty if tool_requered is true\",\n'
                     '  \"tool_required\": boolean,                                  // whether you will invoke an external tool (analyze_image/analyze_video)\n'
                     '  \"tool_name\": \"string (if tool_required true; one of the registered tools)\",\n'
                     '  \"input_schema_fields\": [                                   // required inputs if tool_required true\n'

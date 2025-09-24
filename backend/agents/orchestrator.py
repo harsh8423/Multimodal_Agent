@@ -273,7 +273,7 @@ async def orchestrator(
             await session_context.send_nano("orchestrator", f"routing → {agent_name}")
         agent_query = orchestration.get("agent_query", "").strip()
 
-        if agent_name not in ("research_agent", "asset_agent"):  ##### To be made dynamic later 
+        if agent_name not in ("research_agent", "asset_agent", "media_analyst"):  ##### To be made dynamic later 
             err_msg = f"Unknown agent requested: '{agent_name}'."
             if session_context:
                 await session_context.send_nano("orchestrator", err_msg)

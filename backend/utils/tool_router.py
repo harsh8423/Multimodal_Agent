@@ -67,11 +67,38 @@ def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
             tool_function = getattr(tools_module, tool_name)
         else:
             # Try importing from google_sheets module
-            tools_module = importlib.import_module("tools.google_sheets")
-            if hasattr(tools_module, tool_name):
-                tool_function = getattr(tools_module, tool_name)
-            else:
-                raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+            try:
+                tools_module = importlib.import_module("tools.google_sheets")
+                if hasattr(tools_module, tool_name):
+                    tool_function = getattr(tools_module, tool_name)
+                else:
+                    # Try importing from gemini_image module
+                    tools_module = importlib.import_module("tools.gemini_image")
+                    if hasattr(tools_module, tool_name):
+                        tool_function = getattr(tools_module, tool_name)
+                    else:
+                        # Try importing from gemini_video module
+                        tools_module = importlib.import_module("tools.gemini_video")
+                        if hasattr(tools_module, tool_name):
+                            tool_function = getattr(tools_module, tool_name)
+                        else:
+                            raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+            except ImportError as e:
+                # If google_sheets import fails (due to missing service_account.json), try other modules
+                if "service_account.json" in str(e):
+                    # Try importing from gemini_image module
+                    tools_module = importlib.import_module("tools.gemini_image")
+                    if hasattr(tools_module, tool_name):
+                        tool_function = getattr(tools_module, tool_name)
+                    else:
+                        # Try importing from gemini_video module
+                        tools_module = importlib.import_module("tools.gemini_video")
+                        if hasattr(tools_module, tool_name):
+                            tool_function = getattr(tools_module, tool_name)
+                        else:
+                            raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+                else:
+                    raise
         
         # Get function signature to determine required parameters
         sig = inspect.signature(tool_function)
@@ -126,6 +153,24 @@ def get_available_tools() -> list:
         sheets_tools = [name for name, obj in inspect.getmembers(sheets_module) 
                        if inspect.isfunction(obj) and not name.startswith('_')]
         available_tools.extend(sheets_tools)
+    except ImportError:
+        pass
+    
+    # Check gemini_image tools
+    try:
+        gemini_image_module = importlib.import_module("tools.gemini_image")
+        gemini_image_tools = [name for name, obj in inspect.getmembers(gemini_image_module) 
+                             if inspect.isfunction(obj) and not name.startswith('_')]
+        available_tools.extend(gemini_image_tools)
+    except ImportError:
+        pass
+    
+    # Check gemini_video tools
+    try:
+        gemini_video_module = importlib.import_module("tools.gemini_video")
+        gemini_video_tools = [name for name, obj in inspect.getmembers(gemini_video_module) 
+                             if inspect.isfunction(obj) and not name.startswith('_')]
+        available_tools.extend(gemini_video_tools)
     except ImportError:
         pass
     

@@ -40,6 +40,20 @@
         "google_sheet_update"
       ],
       "default_prompt_template": "You are ASSET_AGENT. Produce or fetch assets and return structured metadata; use the available tools to store or index assets. {place_holder}\n\nTools available to you (detailed below):\n{TOOLS_SECTION}\n\nOutput RULE: Return a STRICT JSON object only (no extra text). The JSON must follow this schema exactly:\n{\n  \"text\": \"final response to be returned or empty if tool_requered is true\",\n  \"tool_required\": boolean,                                  // whether you will invoke an external tool (sheet write, image gen)\n  \"tool_name\": \"string (if tool_required true; one of the registered tools)\",\n  \"input_schema_fields\": [                                   // required inputs if tool_required true\n       {\"field_name\": \"value\", ...}  ],\n  \"planner\": {\n      \"plan_steps\": [\n          {\"id\":1, \"description\":\"string\", \"status\":\"pending|in_progress|completed\"}, // always mark first steps as in_progress\n          ...\n      ],\n      \"summary\": \"short plan summary\"\n  },}\n\nProcess rules:\n1) Begin by producing an initial plan (planner) of 1..N steps required to create/fetch/store the asset. For trivial asset requests a single-step plan is acceptable.\n2) If you set `tool_required` true, choose one primary tool in `tool_name` and enumerate exactly the `required_input_schema_fields` (name, type, example, required). Do NOT call multiple tools simultaneously in the initial output\u2014prefer a single primary tool unless the user asked otherwise.\n3) After creating/fetching the asset, update `plan_steps` statuses .\n4) Output ONLY the JSON object described above, nothing else.5) If you can do it in one step, do it in one step, just call the tool and return the result."
+    },
+    "media_analyst": {
+      "short_description": "Multimodal analyst specialized in analyzing images and videos using the analyze_image and analyze_video tools (Gemini-backed).",
+      "capabilities": [
+        "Analyze one or multiple image URLs and return structured descriptions, detected objects, scene context, and timestamps of key events (if present).",
+        "Analyze a single video URL and return structured summaries, shot boundaries, detected objects/actions, and timestamps of key events.",
+        "Decide which media tool to call (image vs video) given the user's query and media URL(s).",
+        "Return strictly-structured JSON following the required schema and planner workflow."
+      ],
+      "tools": [
+        "analyze_image",
+        "analyze_video"
+      ],
+      "default_prompt_template": "You are MEDIA_ANALYST. You specialize in analyzing images and videos. {place_holder}\n\nTools available to you (detailed below):\n{TOOLS_SECTION}\n\nDecision rules:\n - If input contains one or more image URLs, prefer analyze_image (can accept multiple URLs).\n - If input contains a single video URL, prefer analyze_video.\n - If user provides ambiguous media, ask for clarification only if absolutely necessary. Prefer a single-step plan when possible to call the appropriate tool.\n\nOutput RULE: Return a STRICT JSON object only (no extra text). The JSON must follow this schema exactly:\n{\n  \"text\": \"final response to be returned or empty if tool_requered is true\",\n  \"tool_required\": boolean,                                  // whether you will invoke an external tool (analyze_image/analyze_video)\n  \"tool_name\": \"string (if tool_required true; one of the registered tools)\",\n  \"input_schema_fields\": [                                   // required inputs if tool_required true\n       {\"system_prompt\": \"string (example)\", \"user_query\":\"string (example)\", \"image_urls\":[\"https://...\"], \"video_url\":\"https://...\"}\n  ],\n}\n\nProcess rules:\n1) Build an initial planner. For straightforward media analysis, produce a single-step plan that calls the correct tool with the minimal inputs.\n2) When setting `tool_required` true, set `tool_name` to either `analyze_image` or `analyze_video` and populate `input_schema_fields` with exact fields the tool expects using the examples above.\n3) Tools must be called with: system_prompt, user_query, and either image_urls (list) or video_url (single string). Include any extra context inside the user_query in [] if needed.\n4) Output ONLY the JSON object described above, nothing else."
     }
   },
   "tools": {
@@ -218,6 +232,67 @@
         "new_value": {
           "type": "string",
           "required": true
+        }
+      }
+    },
+    "analyze_image": {
+      "tool_description": "Analyze one or more image URLs with Gemini multimodal model and return structured JSON analysis.",
+      "capabilities": [
+        "Describe scenes, objects, attributes, relationships",
+        "Return detected objects with confidence scores and bounding boxes (if available)",
+        "Produce scene-level summary and per-image structured output",
+        "Highlight safety/NSFW concerns and any text detected via OCR"
+      ],
+      "input_schema": {
+        "system_prompt": {
+          "type": "string",
+          "required": true,
+          "description": "System instruction for the Gemini model (defines role/response format). Example: 'You are an assistant that returns JSON with keys summary, detected_objects, per_image_analysis'"
+        },
+        "user_query": {
+          "type": "string",
+          "required": true,
+          "description": "User's query / instruction describing what to analyze or extract from the images"
+        },
+        "image_urls": {
+          "type": "array",
+          "required": true,
+          "description": "List of publicly accessible image URLs to analyze"
+        },
+        "model_name": {
+          "type": "string",
+          "required": false,
+          "description": "Gemini model to use (default: 'gemini-2.5-flash')"
+        }
+      }
+    },
+    "analyze_video": {
+      "tool_description": "Analyze a single video URL with Gemini multimodal model and return structured JSON analysis including timestamps of key events.",
+      "capabilities": [
+        "Summarize the video, list detected objects and actions, return timestamped key events and shot boundaries",
+        "Detect repeated patterns, safety issues, or textual overlays (OCR)",
+        "Provide scene-level descriptions and an ordered timeline of notable moments"
+      ],
+      "input_schema": {
+        "system_prompt": {
+          "type": "string",
+          "required": true,
+          "description": "System instruction for the Gemini model (defines role/response format). Example: 'You are an assistant that returns JSON with keys summary, timeline, detected_objects'"
+        },
+        "user_query": {
+          "type": "string",
+          "required": true,
+          "description": "User's query / instruction describing what to analyze or extract from the video"
+        },
+        "video_url": {
+          "type": "string",
+          "required": true,
+          "description": "Publicly accessible URL of the video to analyze (single URL)"
+        },
+        "model_name": {
+          "type": "string",
+          "required": false,
+          "description": "Gemini model to use (default: 'gemini-2.5-pro')"
         }
       }
     }

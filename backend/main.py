@@ -179,7 +179,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             # Create session after successful authentication
                             session_context = await create_session(
                                 user_id=current_user.id,
-                                agent_names=["research_agent", "asset_agent", "orchestrator"],
+                                agent_names=["research_agent", "asset_agent", "orchestrator", "media_analyst"],
                                 websocket=websocket,
                                 chat_id=current_chat_id
                             )
