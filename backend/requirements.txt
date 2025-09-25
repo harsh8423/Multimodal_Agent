@@ -9,6 +9,10 @@ python-multipart==0.0.6
 httpx==0.25.2
 pydantic[email]
 websockets==12.0
+yt-dlp
+praw
+instaloader
+gallery-dl
 
 google-auth 
 google-auth-oauthlib 
