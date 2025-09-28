@@ -34,13 +34,24 @@ def create_safe_filename(url: str, headers: dict) -> str:
     # If filename doesn't have extension, try to get it from headers
     if '.' not in base_filename:
         ext = get_file_extension_from_headers(headers)
+        if not ext:
+            # Default extensions based on content type
+            content_type = headers.get('content-type', '').lower()
+            if 'video' in content_type:
+                ext = '.mp4'
+            elif 'image' in content_type:
+                ext = '.jpg'
+            else:
+                ext = '.bin'  # fallback
         base_filename = f"{base_filename}{ext}"
     
-    # Sanitize filename
+    # Sanitize filename but preserve extension
     safe_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_"
-    safe_filename = ''.join(c if c in safe_chars else '_' for c in base_filename)
+    name_part, ext_part = os.path.splitext(base_filename)
+    safe_name = ''.join(c if c in safe_chars else '_' for c in name_part)
+    safe_filename = f"{safe_name}{ext_part}"
     
-    return safe_filename or "downloaded_media"
+    return safe_filename or "downloaded_media.jpg"
 
 
 def validate_url(url: str) -> bool:
@@ -161,7 +172,7 @@ def batch_download_media(urls: list, **kwargs) -> list:
 if __name__ == "__main__":
     # Single file download
     success, message, info = download_media_file(
-        "https://www.youtube.com/watch?v=4HhqSYexIwo",
+        "https://media.licdn.com/dms/image/v2/D5622AQHi-j1YGk6ILw/feedshare-shrink_1280/B56ZlrYucNKwAw-/0/1758443269517?e=1761782400&v=beta&t=qFkHNcMq5tmaW1B5pMHEhinqlYCTi_vRoDtJ-Rst9GE",
         output_dir="my_downloads",
         overwrite=True
     )

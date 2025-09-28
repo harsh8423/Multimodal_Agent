@@ -45,9 +45,28 @@ app.include_router(auth_router)
 # Include chat management routes
 app.include_router(chats_router)
 
+# Include social media management routes
+from routes import brands, templates, competitors, scraped_posts, scraping
+app.include_router(brands.router)
+app.include_router(templates.router)
+app.include_router(competitors.router)
+app.include_router(scraped_posts.router)
+app.include_router(scraping.router)
+
 @app.get("/")
 async def root():
-    return {"message": "Multimodal Agent API is running", "status": "ok"}
+    return {
+        "message": "Multimodal Agent API is running", 
+        "status": "ok",
+        "endpoints": {
+            "auth": "/api/auth",
+            "brands": "/api/brands",
+            "templates": "/api/templates",
+            "competitors": "/api/competitors",
+            "scraped_posts": "/api/scraped-posts",
+            "scraping": "/api/scraping"
+        }
+    }
 
 @app.get("/health")
 async def health_check():
@@ -179,16 +198,16 @@ async def websocket_endpoint(websocket: WebSocket):
                             # Create session after successful authentication
                             session_context = await create_session(
                                 user_id=current_user.id,
-                                agent_names=["research_agent", "asset_agent", "orchestrator", "media_analyst"],
+                                agent_names=["research_agent", "asset_agent", "orchestrator", "media_analyst", "social_media_search_agent"],
                                 websocket=websocket,
                                 chat_id=current_chat_id
-                            )
+                            ) 
                             
                             # Hydrate memories if we have a chat_id
                             if current_chat_id:
                                 await session_context.hydrate_memories_from_db(current_chat_id)
                             
-                            
+                        
                             # Send authentication success
                             await send_json({
                                 "type": "auth_success",

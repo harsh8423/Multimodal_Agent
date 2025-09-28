@@ -35,14 +35,8 @@ def extract_post_data(post: praw.models.Submission) -> Dict[str, Any]:
         'num_comments': post.num_comments,
         'created_utc': post.created_utc,
         'created_time': datetime.fromtimestamp(post.created_utc).isoformat(),
-        'is_self': post.is_self,
         'over_18': post.over_18,
-        'spoiler': post.spoiler,
-        'stickied': post.stickied,
-        'distinguished': post.distinguished,
         'link_flair_text': post.link_flair_text,
-        'gilded': post.gilded,
-        'locked': post.locked
     }
 
 
@@ -58,10 +52,6 @@ def extract_comment_data(comment: praw.models.Comment) -> Optional[Dict[str, Any
         'score': comment.score,
         'created_utc': comment.created_utc,
         'created_time': datetime.fromtimestamp(comment.created_utc).isoformat(),
-        'is_submitter': comment.is_submitter,
-        'distinguished': comment.distinguished,
-        'gilded': comment.gilded,
-        'stickied': comment.stickied,
         'depth': comment.depth if hasattr(comment, 'depth') else 0,
         'parent_id': comment.parent_id,
         'permalink': f"https://reddit.com{comment.permalink}"
@@ -267,7 +257,3 @@ def main():
     
     except Exception as e:
         print(f"Error in main: {str(e)}")
-
-
-if __name__ == "__main__":
-    main()

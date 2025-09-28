@@ -7,6 +7,7 @@ from utils.utility import _call_openai_chatmodel, _normalize_model_output
 from agents.research_agent import research_agent
 from agents.asset_agent import asset_agent
 from agents.media_analyst import media_analyst
+from agents.social_media_search_agent import social_media_search_agent
 from utils.session_memory import SessionContext
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"

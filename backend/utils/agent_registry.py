@@ -176,6 +176,47 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "4) Output ONLY the JSON object described above, nothing else."
                 )
             },
+
+            # New social_media_search_agent
+            "social_media_search_agent": {
+                "short_description": "Specialized agent for social media search and media downloading across multiple platforms using unified_search and get_media tools.",
+                "capabilities": [
+                    "Search for posts and content across Instagram, YouTube, and Reddit using unified_search",
+                    "Download media content (videos, images) with metadata from supported platforms using get_media",
+                    "Detect media URLs in user queries and automatically download them",
+                    "Return structured search results and downloaded media with metadata"
+                ],
+                "tools": [
+                    "unified_search",
+                    "get_media"
+                ],
+                "default_prompt_template": (
+                    "You are SOCIAL_MEDIA_SEARCH_AGENT. You specialize in social media search and media downloading. {place_holder}\n\n"
+                    "Tools available to you (detailed below):\n{TOOLS_SECTION}\n\n"
+                    "Decision rules:\n"
+                    " - If user query contains media URLs (YouTube, Instagram, LinkedIn), use get_media to download them with metadata.\n"
+                    " - If user wants to search for content across platforms, use unified_search with appropriate parameters.\n"
+                    " - For search queries, determine the platform(s) and search parameters needed.\n"
+                    " - Always extract and preserve metadata from downloaded media.\n\n"
+                    "Output RULE: Return a STRICT JSON object only (no extra text). The JSON must follow this schema exactly:\n"
+                    "{\n"
+                    '  \"text\": \"final response to be returned or empty if tool_requered is true\",\n'
+                    '  \"tool_required\": boolean,                                  // whether you will invoke an external tool (unified_search/get_media)\n'
+                    '  \"tool_name\": \"string (if tool_required true; one of the registered tools)\",\n'
+                    '  \"input_schema_fields\": [                                   // required inputs if tool_required true\n'
+                    '       {"platform": "instagram|youtube|reddit", "query": "search term", "limit": 10, "url": "media_url"}\n'
+                    '  ],\n'
+                    "}\n\n"
+                    "Process rules:\n"
+                    "1) Start by building an initial plan (planner). Keep plans as small as possible for simple queries (single-step) and detailed for complex queries (multi-step).\n"
+                    "2) Try to implement the plan in the least number of steps possible. If you can do it in one step, do it in one step, just call the tool and return the result.\n"
+                    "3) If `tool_required` is true, set `tool_name` to either `unified_search` or `get_media` and populate `input_schema_fields` with exactly the inputs you need.\n"
+                    "4) For unified_search: specify platform, query, limit, and optional parameters like days_back, search_type.\n"
+                    "5) For get_media: provide the media URL and any optional parameters like upload_to_cloudinary_flag.\n"
+                    "6) After performing searches or downloads, update the planner step statuses and provide final results.\n"
+                    "7) Output ONLY the JSON object described above, nothing else."
+                )
+            },
         },
         "tools": {
             # Research tools (unchanged)
@@ -306,6 +347,80 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                         "type": "string",
                         "required": False,
                         "description": "Gemini model to use (default: 'gemini-2.5-pro')"
+                    }
+                }
+            },
+
+            # Social media search and media tools
+            "unified_search": {
+                "tool_description": "Unified search across multiple social media platforms (Instagram, YouTube, Reddit) with configurable parameters.",
+                "capabilities": [
+                    "Search Instagram posts using Apify API (hashtags, users, etc.)",
+                    "Search YouTube videos using official API with date filters",
+                    "Search Reddit posts across all subreddits using PRAW",
+                    "Return structured results with metadata and platform-specific information"
+                ],
+                "input_schema": {
+                    "platform": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Platform to search: 'instagram', 'youtube', or 'reddit'"
+                    },
+                    "query": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Search query string"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "required": False,
+                        "description": "Maximum number of results to fetch (default: 10)"
+                    },
+                    "days_back": {
+                        "type": "integer",
+                        "required": False,
+                        "description": "Number of days to look back for content (YouTube, Reddit)"
+                    },
+                    "search_type": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Type of search for Instagram: 'hashtag' or 'user' (default: 'hashtag')"
+                    },
+                    "api_token": {
+                        "type": "string",
+                        "required": False,
+                        "description": "API token for Apify services (Instagram)"
+                    },
+                    "api_key": {
+                        "type": "string",
+                        "required": False,
+                        "description": "API key for YouTube"
+                    }
+                }
+            },
+            "get_media": {
+                "tool_description": "Download media content (videos, images) with metadata from supported platforms (YouTube, Instagram, LinkedIn).",
+                "capabilities": [
+                    "Download videos and images from YouTube, Instagram, and LinkedIn",
+                    "Extract metadata including captions, likes, comments, published dates",
+                    "Upload downloaded media to Cloudinary for cloud storage",
+                    "Return structured results with file paths, metadata, and Cloudinary URLs"
+                ],
+                "input_schema": {
+                    "url": {
+                        "type": "string",
+                        "required": True,
+                        "description": "URL of the media content to download (YouTube, Instagram, LinkedIn)"
+                    },
+                    "upload_to_cloudinary_flag": {
+                        "type": "boolean",
+                        "required": False,
+                        "description": "Whether to upload downloaded media to Cloudinary (default: True)"
+                    },
+                    "custom_config": {
+                        "type": "object",
+                        "required": False,
+                        "description": "Optional custom configuration to override defaults"
                     }
                 }
             }

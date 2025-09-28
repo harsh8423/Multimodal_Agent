@@ -10,6 +10,8 @@ Requirements:
 
 import os
 import sys
+import tempfile
+import shutil
 from functools import wraps, partial
 from typing import Optional, Dict, Any, Callable, List, Tuple
 import subprocess
@@ -18,7 +20,114 @@ from pathlib import Path
 import re
 import requests
 from urllib.parse import urlparse
-from linkedinscrape import search_linkedin_with_apify
+from .linkedinscrape import search_linkedin_with_apify
+
+# Import Cloudinary utilities
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from upload_cloudinary import upload_to_cloudinary
+
+
+# Media processing functions for Cloudinary upload
+def process_media_file_to_cloudinary(file_path: str, platform: str, content_type: str) -> Optional[Dict[str, Any]]:
+    """
+    Upload a single media file to Cloudinary and return metadata.
+    
+    Args:
+        file_path: Path to the media file
+        platform: Platform name (youtube, instagram, linkedin)
+        content_type: Content type (video, image)
+        
+    Returns:
+        Dictionary with Cloudinary URL and metadata, or None if failed
+    """
+    if not os.path.exists(file_path):
+        print(f"File not found: {file_path}")
+        return None
+        
+    try:
+        # Determine resource type
+        resource_type = "video" if content_type in ['video', 'youtube', 'instagram_reel'] else "image"
+        folder = f"social_media/{platform}"
+        
+        print(f"Uploading to Cloudinary: {file_path} (type: {resource_type})")
+        
+        # Upload to Cloudinary
+        cloudinary_response = upload_to_cloudinary(
+            file_path=file_path,
+            options={
+                "resourceType": resource_type,
+                "folder": folder
+            }
+        )
+        
+        # Get file info
+        file_size = os.path.getsize(file_path)
+        file_extension = os.path.splitext(file_path)[1]
+        
+        return {
+            "cloudinary_url": cloudinary_response.get("secure_url"),
+            "public_id": cloudinary_response.get("public_id"),
+            "file_size": file_size,
+            "file_extension": file_extension,
+            "resource_type": resource_type,
+            "folder": folder,
+            "original_path": file_path
+        }
+        
+    except Exception as e:
+        print(f"Error uploading {file_path} to Cloudinary: {str(e)}")
+        return None
+
+
+def process_downloaded_media_files(files: List[str], platform: str, content_type: str) -> Dict[str, Any]:
+    """
+    Process all downloaded media files and upload to Cloudinary.
+    
+    Args:
+        files: List of downloaded file paths
+        platform: Platform name
+        content_type: Content type
+        
+    Returns:
+        Dictionary with processed media info and Cloudinary URLs
+    """
+    processed_media = {
+        "cloudinary_urls": [],
+        "local_files_cleaned": [],
+        "upload_errors": [],
+        "total_files": len(files),
+        "successful_uploads": 0
+    }
+    
+    # Filter out non-media files (JSON, text files, etc.)
+    media_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov', '.jpg', '.jpeg', '.png', '.webp', '.gif']
+    media_files = [f for f in files if any(f.lower().endswith(ext) for ext in media_extensions)]
+    
+    print(f"Processing {len(media_files)} media files for Cloudinary upload...")
+    
+    for file_path in media_files:
+        try:
+            # Upload to Cloudinary
+            cloudinary_info = process_media_file_to_cloudinary(file_path, platform, content_type)
+            
+            if cloudinary_info:
+                processed_media["cloudinary_urls"].append(cloudinary_info)
+                processed_media["successful_uploads"] += 1
+                
+                # Delete local file after successful upload
+                try:
+                    os.remove(file_path)
+                    processed_media["local_files_cleaned"].append(file_path)
+                    print(f"Cleaned up local file: {file_path}")
+                except OSError as e:
+                    print(f"Warning: Could not delete {file_path}: {e}")
+            else:
+                processed_media["upload_errors"].append(f"Failed to upload: {file_path}")
+                
+        except Exception as e:
+            processed_media["upload_errors"].append(f"Error processing {file_path}: {str(e)}")
+    
+    return processed_media
 
 
 # Pure functions for configuration
@@ -295,8 +404,8 @@ def validate_url(url: str) -> Optional[str]:
     if 'instagram.com' in url.lower():
         url = clean_instagram_url(url)
     
-    if not any(domain in url.lower() for domain in ['youtube.com', 'youtu.be', 'instagram.com']):
-        raise ValueError("URL must be from YouTube or Instagram")
+    if not any(domain in url.lower() for domain in ['youtube.com', 'youtu.be', 'instagram.com', 'linkedin.com']):
+        raise ValueError("URL must be from YouTube, Instagram, or LinkedIn")
     
     return url
 
@@ -501,17 +610,18 @@ def try_yt_dlp_download(url: str, config: Dict[str, Any]) -> Dict[str, Any]:
 
 @with_error_handling
 @with_logging
-def download_video(url: str, custom_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def download_video(url: str, custom_config: Optional[Dict[str, Any]] = None, upload_to_cloudinary_flag: bool = True) -> Dict[str, Any]:
     """
     Main function to download video/image from URL using functional composition.
-    Now includes caption/description extraction.
+    Now includes caption/description extraction and optional Cloudinary upload.
     
     Args:
         url: The URL of the video/image to download
         custom_config: Optional custom configuration to override defaults
+        upload_to_cloudinary_flag: Whether to upload downloaded media to Cloudinary
     
     Returns:
-        Dictionary with success status, file info, metadata, and caption/description
+        Dictionary with success status, file info, metadata, caption/description, and Cloudinary URLs
     """
     # Validate URL
     clean_url = validate_url(url)
@@ -570,6 +680,18 @@ def download_video(url: str, custom_config: Optional[Dict[str, Any]] = None) -> 
                 'url': clean_url,
                 'config': final_config
             })
+            
+            # Process media files for Cloudinary upload if enabled
+            if upload_to_cloudinary_flag and result.get('files'):
+                platform = 'instagram'
+                processed_media = process_downloaded_media_files(result['files'], platform, content_type)
+                result['cloudinary_media'] = processed_media
+                
+                # Update files list to show Cloudinary URLs instead of local paths
+                if processed_media['cloudinary_urls']:
+                    result['cloudinary_urls'] = [media['cloudinary_url'] for media in processed_media['cloudinary_urls']]
+                    result['files'] = [media['cloudinary_url'] for media in processed_media['cloudinary_urls']]
+        
         return result
     else:
         # For non-Instagram posts, use yt-dlp
@@ -578,6 +700,18 @@ def download_video(url: str, custom_config: Optional[Dict[str, Any]] = None) -> 
             'url': clean_url,
             'config': final_config
         })
+        
+        # Process media files for Cloudinary upload if enabled
+        if upload_to_cloudinary_flag and result.get('success') and result.get('files'):
+            platform = 'youtube' if 'youtube' in content_type else 'other'
+            processed_media = process_downloaded_media_files(result['files'], platform, content_type)
+            result['cloudinary_media'] = processed_media
+            
+            # Update files list to show Cloudinary URLs instead of local paths
+            if processed_media['cloudinary_urls']:
+                result['cloudinary_urls'] = [media['cloudinary_url'] for media in processed_media['cloudinary_urls']]
+                result['files'] = [media['cloudinary_url'] for media in processed_media['cloudinary_urls']]
+        
         return result
 
 
@@ -714,18 +848,19 @@ def create_audio_downloader() -> Callable:
 
 
 # Batch processing using map
-def download_multiple(urls: list, custom_config: Optional[Dict[str, Any]] = None) -> list:
+def download_multiple(urls: list, custom_config: Optional[Dict[str, Any]] = None, upload_to_cloudinary_flag: bool = True) -> list:
     """
     Download multiple videos using functional map.
     
     Args:
         urls: List of URLs to download
         custom_config: Optional custom configuration
+        upload_to_cloudinary_flag: Whether to upload downloaded media to Cloudinary
     
     Returns:
         List of results for each download
     """
-    downloader = partial(download_video, custom_config=custom_config)
+    downloader = partial(download_video, custom_config=custom_config, upload_to_cloudinary_flag=upload_to_cloudinary_flag)
     return list(map(downloader, urls))
 
 
@@ -774,29 +909,30 @@ def main():
 
     # Download a single video with metadata
     # Pick the first URL from the test_urls dictionary
-    # first_url = list(test_urls.values())[0]
-    # result = download_video(first_url)
+    first_url = list(test_urls.values())[2]
+    result = download_video(first_url)
     
-    results = download_multiple(list(test_urls.values()))
+    # results = download_multiple(list(test_urls.values()))
     
     print("\nDownload Results:")
     print("=" * 50)
+    print(result)
     
-    for i, result in enumerate(results, 1):
-        print(f"\nResult {i}:")
-        print(f"Success: {result.get('success')}")
-        if result.get('success'):
-            print(f"Files: {result.get('files')}")
-            if result.get('metadata'):
-                metadata = result.get('metadata')
-                print(f"Caption: {metadata.get('caption', '')[:100]}...")
-                print(f"Username: {metadata.get('username', '')}")
-                print(f"Likes: {metadata.get('likes', 0)}")
-                print(f"Comments: {metadata.get('comments', 0)}")
-                print(f"Published Date: {metadata.get('published_date', '')}")
-                print(f"Content Type: {metadata.get('content_type', '')}")
-        else:
-            print(f"Error: {result.get('error')}")
+    # for i, result in enumerate(results, 1):
+    #     print(f"\nResult {i}:")
+    #     print(f"Success: {result.get('success')}")
+    #     if result.get('success'):
+    #         print(f"Files: {result.get('files')}")
+    #         if result.get('metadata'):
+    #             metadata = result.get('metadata')
+    #             print(f"Caption: {metadata.get('caption', '')[:100]}...")
+    #             print(f"Username: {metadata.get('username', '')}")
+    #             print(f"Likes: {metadata.get('likes', 0)}")
+    #             print(f"Comments: {metadata.get('comments', 0)}")
+    #             print(f"Published Date: {metadata.get('published_date', '')}")
+    #             print(f"Content Type: {metadata.get('content_type', '')}")
+    #     else:
+    #         print(f"Error: {result.get('error')}")
     
     # # Download multiple videos
     # 
@@ -829,6 +965,22 @@ def main():
     
     # print("\nFilter downloads with captions:")
     # print("  with_captions = filter_with_captions(results)")
+
+
+# Wrapper function for tool router
+def get_media(url: str, upload_to_cloudinary_flag: bool = True, custom_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Wrapper function for download_video to match tool router expectations.
+    
+    Args:
+        url: The URL of the media content to download
+        upload_to_cloudinary_flag: Whether to upload downloaded media to Cloudinary
+        custom_config: Optional custom configuration to override defaults
+        
+    Returns:
+        Dictionary with success status, file info, metadata, and Cloudinary URLs
+    """
+    return download_video(url, custom_config, upload_to_cloudinary_flag)
 
 
 if __name__ == "__main__":

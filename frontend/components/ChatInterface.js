@@ -13,7 +13,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Settings,
+  BarChart3
 } from 'lucide-react';
 import Message from '@/components/Message';
 import ChatInput from '@/components/ChatInput';
@@ -24,6 +26,7 @@ import ChatHistory from '@/components/ChatHistory';
 import { MultimodalAgentClient } from '@/lib/websocket-client';
 import { authService } from '@/lib/auth';
 import { uploadToCloudinary } from '@/lib/cloudinary';
+import { useRouter } from 'next/navigation';
 
 const ChatInterface = ({ user: userProp }) => {
   const [messages, setMessages] = useState([]);
@@ -42,6 +45,7 @@ const ChatInterface = ({ user: userProp }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [nanoStream, setNanoStream] = useState([]); // rolling tiny status lines
   const [nanoExpanded, setNanoExpanded] = useState(false);
+  const router = useRouter();
 
   const clientRef = useRef(null);
   const API_BASE_URL = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000') : '';
@@ -412,6 +416,28 @@ const ChatInterface = ({ user: userProp }) => {
             </div>
           )}
         </div>
+
+        {/* Navigation Menu */}
+        {!sidebarCollapsed && (
+          <div className="px-4 py-2 border-b border-gray-200">
+            <div className="space-y-1">
+              <button
+                onClick={() => router.push('/')}
+                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Chat</span>
+              </button>
+              <button
+                onClick={() => router.push('/asset-manager')}
+                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Manage Assets</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Chat History */}
         <div className="flex-1 overflow-y-auto">

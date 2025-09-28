@@ -3,6 +3,7 @@ import requests
 from dotenv import load_dotenv
 import os
 import time
+import json
 
 load_dotenv()
 
@@ -89,8 +90,27 @@ def scrape_linkedin_with_apify(profile_url: str, max_posts: int = 5, api_token: 
             
             if dataset_response.status_code == 200:
                 data = dataset_response.json()
-                print(f"Data received: {len(data) if isinstance(data, list) else 'Not a list'}")
-                return data
+                
+                # Filter and transform data to return only specified fields
+                filtered_data = []
+                for post in data:
+                    filtered_post = {
+                        "type": post.get("type"),
+                        "id": post.get("id"),
+                        "url": post.get("linkedinUrl"),
+                        "content": post.get("content"),
+                        "author_name": post.get("author", {}).get("name"),
+                        "author_profile_url": post.get("author", {}).get("linkedinUrl"),
+                        "posted_date": post.get("postedAt", {}).get("date"),
+                        "postImages": post.get("postImages", []),
+                        "likes": post.get("engagement", {}).get("likes"),
+                        "comments": post.get("engagement", {}).get("comments")
+                    }
+                    filtered_data.append(filtered_post)
+                
+                json.dump(filtered_data, open("linkedin_data.json", "w"))
+                print(f"Data received: {len(filtered_data) if isinstance(filtered_data, list) else 'Not a list'}")
+                return filtered_data
             else:
                 raise Exception(f"Failed to get dataset: {dataset_response.status_code}, {dataset_response.text}")
                 
@@ -101,7 +121,3 @@ def scrape_linkedin_with_apify(profile_url: str, max_posts: int = 5, api_token: 
         time.sleep(wait_interval)
     
     raise Exception("Actor run timed out")
-
-if __name__ == "__main__":
-    print(scrape_linkedin_with_apify("https://www.linkedin.com/in/satyanadella/"))
-

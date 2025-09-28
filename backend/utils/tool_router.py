@@ -16,6 +16,8 @@ API_KEY_MAPPINGS = {
     "google_sheet_reader": "GOOGLE_SHEETS_API_KEY",
     "google_sheet_append": None,  # Uses service account
     "google_sheet_update": None,  # Uses service account
+    "unified_search": "APIFY_API_TOKEN",  # For Instagram searches
+    "get_media": None,  # No API key required
 }
 
 def get_api_key(tool_name: str) -> Optional[str]:
@@ -82,7 +84,17 @@ def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
                         if hasattr(tools_module, tool_name):
                             tool_function = getattr(tools_module, tool_name)
                         else:
-                            raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+                            # Try importing from unified_search module
+                            tools_module = importlib.import_module("tools.unified_search")
+                            if hasattr(tools_module, tool_name):
+                                tool_function = getattr(tools_module, tool_name)
+                            else:
+                                # Try importing from get_media module
+                                tools_module = importlib.import_module("tools.get_media")
+                                if hasattr(tools_module, tool_name):
+                                    tool_function = getattr(tools_module, tool_name)
+                                else:
+                                    raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
             except ImportError as e:
                 # If google_sheets import fails (due to missing service_account.json), try other modules
                 if "service_account.json" in str(e):
@@ -96,7 +108,17 @@ def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
                         if hasattr(tools_module, tool_name):
                             tool_function = getattr(tools_module, tool_name)
                         else:
-                            raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+                            # Try importing from unified_search module
+                            tools_module = importlib.import_module("tools.unified_search")
+                            if hasattr(tools_module, tool_name):
+                                tool_function = getattr(tools_module, tool_name)
+                            else:
+                                # Try importing from get_media module
+                                tools_module = importlib.import_module("tools.get_media")
+                                if hasattr(tools_module, tool_name):
+                                    tool_function = getattr(tools_module, tool_name)
+                                else:
+                                    raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
                 else:
                     raise
         
@@ -171,6 +193,24 @@ def get_available_tools() -> list:
         gemini_video_tools = [name for name, obj in inspect.getmembers(gemini_video_module) 
                              if inspect.isfunction(obj) and not name.startswith('_')]
         available_tools.extend(gemini_video_tools)
+    except ImportError:
+        pass
+    
+    # Check unified_search tools
+    try:
+        unified_search_module = importlib.import_module("tools.unified_search")
+        unified_search_tools = [name for name, obj in inspect.getmembers(unified_search_module) 
+                               if inspect.isfunction(obj) and not name.startswith('_')]
+        available_tools.extend(unified_search_tools)
+    except ImportError:
+        pass
+    
+    # Check get_media tools
+    try:
+        get_media_module = importlib.import_module("tools.get_media")
+        get_media_tools = [name for name, obj in inspect.getmembers(get_media_module) 
+                          if inspect.isfunction(obj) and not name.startswith('_')]
+        available_tools.extend(get_media_tools)
     except ImportError:
         pass
     

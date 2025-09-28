@@ -1,6 +1,7 @@
 import os
 import requests
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -54,27 +55,43 @@ def get_youtube_videos_by_channel(username: str, published_after: str, max_resul
         raise Exception(f"Video fetch failed: {response.status_code}, {response.text}")
 
     data = response.json()
+    json.dump(data, open("yt_data.json", "w"))
     videos = []
     for item in data.get("items", []):
+        # Get channel username from channelId
+        channel_id = item["snippet"]["channelId"]
+        channel_username = None
+        
+        # Get channel details to extract username
+        channel_details_url = "https://www.googleapis.com/youtube/v3/channels"
+        channel_details_params = {
+            "part": "snippet",
+            "id": channel_id,
+            "key": api_key,
+        }
+        channel_details_resp = requests.get(channel_details_url, params=channel_details_params)
+        if channel_details_resp.status_code == 200:
+            channel_details_data = channel_details_resp.json()
+            if channel_details_data.get("items"):
+                # Try to get customUrl first, then fallback to title
+                custom_url = channel_details_data["items"][0]["snippet"].get("customUrl")
+                if custom_url:
+                    channel_username = custom_url
+                else:
+                    # Use channel title as username if customUrl not available
+                    channel_username = item["snippet"]["channelTitle"].lower().replace(" ", "")
+        
         video_data = {
-            "videoId": item["id"]["videoId"],
+            "channel_name": item["snippet"]["channelTitle"],
+            "channel_username": channel_username,
+            "publishTime": item["snippet"]["publishedAt"],
             "title": item["snippet"]["title"],
             "description": item["snippet"]["description"],
-            "publishedAt": item["snippet"]["publishedAt"],
-            "channelTitle": item["snippet"]["channelTitle"],
-            "channelId": item["snippet"]["channelId"],
-            "url": f"https://www.youtube.com/watch?v={item['id']['videoId']}",
+            "video_url": f"https://www.youtube.com/watch?v={item['id']['videoId']}",
+            "thumbnail_url": item["snippet"]["thumbnails"]["high"]["url"]
         }
         videos.append(video_data)
 
     return videos
 
 
-videos = get_youtube_videos_by_channel(
-    username="GoogleDevelopers",
-    published_after="2024-01-01T00:00:00Z",
-    max_results=5
-)
-
-for v in videos:
-    print(v["title"], v["url"])

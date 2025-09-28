@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from fastapi import HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from database import get_database
 from models.user import User, UserInDB, user_helper, generate_session_token
 
@@ -169,3 +171,133 @@ class AuthService:
 
 # Global auth service instance
 auth_service = AuthService()
+
+# Security scheme
+security = HTTPBearer()
+
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """
+    Get current authenticated user from JWT token.
+    
+    Args:
+        credentials: HTTP Bearer token credentials
+        
+    Returns:
+        dict: User information
+        
+    Raises:
+        HTTPException: If token is invalid or user not found
+    """
+    try:
+        # Extract token from credentials
+        token = credentials.credentials
+        
+        # Verify token and get user ID
+        user_id = auth_service.verify_token(token)
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Get user from database
+        user = await auth_service.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Check if user is active
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is deactivated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Return user as dict
+        return {
+            "id": user.id,
+            "google_id": user.google_id,
+            "email": user.email,
+            "name": user.name,
+            "picture": user.picture,
+            "is_active": user.is_active
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+async def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[dict]:
+    """
+    Get current authenticated user from JWT token (optional).
+    
+    Args:
+        credentials: HTTP Bearer token credentials (optional)
+        
+    Returns:
+        dict or None: User information if authenticated, None otherwise
+    """
+    try:
+        if not credentials:
+            return None
+        
+        return await get_current_user(credentials)
+    except HTTPException:
+        return None
+
+
+def create_user_token(user: User) -> str:
+    """
+    Create JWT token for user.
+    
+    Args:
+        user: User object
+        
+    Returns:
+        str: JWT token
+    """
+    return auth_service.create_access_token(data={"sub": user.id})
+
+
+def verify_user_access(user: dict, resource_user_id: str) -> bool:
+    """
+    Verify if user has access to a resource.
+    
+    Args:
+        user: Current user dict
+        resource_user_id: Resource owner's user ID
+        
+    Returns:
+        bool: True if user has access
+    """
+    return user["id"] == resource_user_id
+
+
+def require_user_access(user: dict, resource_user_id: str):
+    """
+    Require user access to a resource, raise exception if not allowed.
+    
+    Args:
+        user: Current user dict
+        resource_user_id: Resource owner's user ID
+        
+    Raises:
+        HTTPException: If user doesn't have access
+    """
+    if not verify_user_access(user, resource_user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )

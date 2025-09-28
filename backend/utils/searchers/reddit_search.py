@@ -32,14 +32,8 @@ def extract_post_data(post: praw.models.Submission) -> Dict[str, Any]:
         'num_comments': post.num_comments,
         'created_utc': post.created_utc,
         'created_time': datetime.fromtimestamp(post.created_utc).isoformat(),
-        'is_self': post.is_self,
         'over_18': post.over_18,
-        'spoiler': post.spoiler,
-        'stickied': post.stickied,
-        'distinguished': post.distinguished,
         'link_flair_text': post.link_flair_text,
-        'gilded': post.gilded,
-        'locked': post.locked
     }
 
 
@@ -157,7 +151,7 @@ def main():
         print("Searching for 'trending ai tools for coding'...")
         
         results = search_reddit(
-            query="trending ai tools for coding",
+            query="ai automation",
             limit=5,
             days_back=30
         )

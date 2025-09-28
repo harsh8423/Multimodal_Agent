@@ -12,20 +12,196 @@ The unified function automatically routes to the appropriate scraper based on th
 
 import asyncio
 import os
+import tempfile
+import shutil
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timedelta
 import json
 
 # Import all scraper modules
-from uitls.scrapers.insta_apifyscrape import scrape_instagram_with_apify
-from uitls.scrapers.insta_codescrape import InstagramScraper
-from uitls.scrapers.linkedin_apifyscrape import scrape_linkedin_with_apify
-from uitls.scrapers.yt_scrape import get_youtube_videos_by_channel
-from uitls.scrapers.reddit import get_reddit_data
+from utils.scrapers.insta_apifyscrape import scrape_instagram_with_apify
+from utils.scrapers.insta_codescrape import InstagramScraper
+from utils.scrapers.linkedin_apifyscrape import scrape_linkedin_with_apify
+from utils.scrapers.yt_scrape import get_youtube_videos_by_channel
+from utils.scrapers.reddit import get_reddit_data
+
+# Import utilities for media handling
+from utils.dowloader import download_media_file
+from utils.upload_cloudinary import upload_to_cloudinary
+
+# Import database service for saving scraped data
+from services.social_media_db import social_media_db
+from models.social_media import PlatformType, ProcessingStatus
 
 
 # Constants
 SUPPORTED_PLATFORMS = ['instagram', 'linkedin', 'youtube', 'reddit']
+
+# Media processing functions
+def process_media_url(url: str, platform: str, temp_dir: str) -> Optional[str]:
+    """
+    Download media from URL, upload to Cloudinary, and return CDN URL.
+    
+    Args:
+        url: Media URL to process
+        platform: Platform name for folder organization
+        temp_dir: Temporary directory for downloads
+        
+    Returns:
+        Cloudinary CDN URL or None if processing failed
+    """
+    if not url:
+        return None
+        
+    try:
+        print(f"Processing media URL: {url[:100]}...")
+        
+        # Download media file
+        success, message, file_info = download_media_file(
+            url=url,
+            output_dir=temp_dir,
+            overwrite=True
+        )
+        
+        if not success:
+            print(f"Failed to download media: {message}")
+            return None
+            
+        file_path = file_info["filepath"]
+        print(f"Downloaded to: {file_path}")
+        print(f"File size: {file_info.get('size_mb', 0)} MB")
+        print(f"Content type: {file_info.get('content_type', 'unknown')}")
+        
+        # Determine resource type and folder
+        resource_type = "video" if any(ext in file_path.lower() for ext in ['.mp4', '.avi', '.mov', '.mkv', '.webm']) else "image"
+        folder = f"social_media/{platform}"
+        
+        # Upload to Cloudinary
+        cloudinary_response = upload_to_cloudinary(
+            file_path=file_path,
+            options={
+                "resourceType": resource_type,
+                "folder": folder
+            }
+        )
+        
+        # Clean up temporary file
+        try:
+            os.remove(file_path)
+            print(f"Cleaned up temporary file: {file_path}")
+        except OSError as e:
+            print(f"Warning: Could not delete temporary file {file_path}: {e}")
+            
+        cloudinary_url = cloudinary_response.get("secure_url")
+        print(f"Cloudinary URL: {cloudinary_url}")
+        return cloudinary_url
+        
+    except Exception as e:
+        print(f"Error processing media URL {url}: {str(e)}")
+        return None
+
+
+def process_instagram_media(post_data: Dict[str, Any], temp_dir: str) -> Dict[str, Any]:
+    """Process Instagram media URLs and replace with Cloudinary URLs."""
+    processed_post = post_data.copy()
+    
+    # Process video URL
+    if post_data.get("videoUrl"):
+        cloudinary_url = process_media_url(post_data["videoUrl"], "instagram", temp_dir)
+        if cloudinary_url:
+            processed_post["videoUrl"] = cloudinary_url
+    
+    # Process display URL (main image)
+    if post_data.get("displayUrl"):
+        cloudinary_url = process_media_url(post_data["displayUrl"], "instagram", temp_dir)
+        if cloudinary_url:
+            processed_post["displayUrl"] = cloudinary_url
+    
+    # Process images array
+    if post_data.get("images") and isinstance(post_data["images"], list):
+        processed_images = []
+        for image_url in post_data["images"]:
+            cloudinary_url = process_media_url(image_url, "instagram", temp_dir)
+            processed_images.append(cloudinary_url if cloudinary_url else image_url)
+        processed_post["images"] = processed_images
+    
+    return processed_post
+
+
+def process_linkedin_media(post_data: Dict[str, Any], temp_dir: str) -> Dict[str, Any]:
+    """Process LinkedIn media URLs and replace with Cloudinary URLs."""
+    processed_post = post_data.copy()
+    
+    # Process postImages array
+    if post_data.get("postImages") and isinstance(post_data["postImages"], list):
+        processed_images = []
+        for image_obj in post_data["postImages"]:
+            # LinkedIn images are objects with url, width, height, expiresAt
+            if isinstance(image_obj, dict) and "url" in image_obj:
+                image_url = image_obj["url"]
+                cloudinary_url = process_media_url(image_url, "linkedin", temp_dir)
+                if cloudinary_url:
+                    # Replace the URL in the object
+                    processed_image_obj = image_obj.copy()
+                    processed_image_obj["url"] = cloudinary_url
+                    processed_images.append(processed_image_obj)
+                else:
+                    processed_images.append(image_obj)  # Keep original if processing failed
+            else:
+                processed_images.append(image_obj)  # Keep as-is if not a valid image object
+        processed_post["postImages"] = processed_images
+    
+    return processed_post
+
+
+def process_youtube_media(video_data: Dict[str, Any], temp_dir: str) -> Dict[str, Any]:
+    """Process YouTube media URLs and replace with Cloudinary URLs."""
+    processed_video = video_data.copy()
+    
+    # Process thumbnail URL
+    if video_data.get("thumbnail_url"):
+        cloudinary_url = process_media_url(video_data["thumbnail_url"], "youtube", temp_dir)
+        if cloudinary_url:
+            processed_video["thumbnail_url"] = cloudinary_url
+    
+    # Note: YouTube video_url is a watch URL, not a direct media file
+    # We don't download the actual video content, just the thumbnail
+    
+    return processed_video
+
+
+def process_media_for_platform(data: List[Dict[str, Any]], platform: str) -> List[Dict[str, Any]]:
+    """Process media URLs for all posts/videos in the data."""
+    if platform == "reddit":
+        # Reddit doesn't need media processing
+        return data
+    
+    # Create temporary directory for downloads
+    temp_dir = tempfile.mkdtemp(prefix=f"media_download_{platform}_")
+    
+    try:
+        processed_data = []
+        for item in data:
+            if platform == "instagram":
+                processed_item = process_instagram_media(item, temp_dir)
+            elif platform == "linkedin":
+                processed_item = process_linkedin_media(item, temp_dir)
+            elif platform == "youtube":
+                processed_item = process_youtube_media(item, temp_dir)
+            else:
+                processed_item = item
+                
+            processed_data.append(processed_item)
+        
+        return processed_data
+        
+    finally:
+        # Clean up temporary directory
+        try:
+            shutil.rmtree(temp_dir)
+        except OSError:
+            pass
+
 
 PLATFORM_INFO = {
     'instagram': {
@@ -111,11 +287,14 @@ def scrape_instagram(
                 api_token=api_token
             )
             
+            # Process media URLs and replace with Cloudinary URLs
+            processed_data = process_media_for_platform(apify_data, 'instagram')
+            
             result.update({
                 'success': True,
                 'method_used': 'apify',
-                'data': apify_data,
-                'count': len(apify_data) if isinstance(apify_data, list) else 1
+                'data': processed_data,
+                'count': len(processed_data) if isinstance(processed_data, list) else 1
             })
             return result
             
@@ -140,11 +319,14 @@ def scrape_instagram(
         finally:
             loop.close()
         
+        # Process media URLs and replace with Cloudinary URLs
+        processed_data = process_media_for_platform(code_data, 'instagram')
+        
         result.update({
             'success': True,
             'method_used': 'code_based',
-            'data': code_data,
-            'count': len(code_data) if isinstance(code_data, list) else 0
+            'data': processed_data,
+            'count': len(processed_data) if isinstance(processed_data, list) else 0
         })
         return result
         
@@ -174,13 +356,16 @@ def scrape_linkedin(
             api_token=api_token
         )
         
+        # Process media URLs and replace with Cloudinary URLs
+        processed_data = process_media_for_platform(linkedin_data, 'linkedin')
+        
         return {
             'success': True,
             'platform': 'linkedin',
             'profile_url': profile_url,
             'method_used': 'apify',
-            'data': linkedin_data,
-            'count': len(linkedin_data) if isinstance(linkedin_data, list) else 0,
+            'data': processed_data,
+            'count': len(processed_data) if isinstance(processed_data, list) else 0,
             'timestamp': datetime.now().isoformat()
         }
         
@@ -220,13 +405,16 @@ def scrape_youtube(
             api_key=api_key
         )
         
+        # Process media URLs and replace with Cloudinary URLs
+        processed_data = process_media_for_platform(youtube_data, 'youtube')
+        
         return {
             'success': True,
             'platform': 'youtube',
             'username': username,
             'method_used': 'official_api',
-            'data': youtube_data,
-            'count': len(youtube_data) if isinstance(youtube_data, list) else 0,
+            'data': processed_data,
+            'count': len(processed_data) if isinstance(processed_data, list) else 0,
             'published_after': published_after,
             'timestamp': datetime.now().isoformat()
         }
@@ -264,13 +452,16 @@ def scrape_reddit(
             min_comments=min_comments or 0
         )
         
+        # Extract posts from the reddit_data structure
+        posts = reddit_data.get('posts', [])
+        
         return {
             'success': True,
             'platform': 'reddit',
             'subreddit': subreddit_name,
             'method_used': 'praw',
-            'data': reddit_data,
-            'count': len(reddit_data.get('posts', [])),
+            'data': posts,  # Return just the posts list
+            'count': len(posts),
             'timestamp': datetime.now().isoformat()
         }
         
@@ -284,9 +475,12 @@ def scrape_reddit(
         }
 
 
-def scrape_social_media(
+async def scrape_social_media(
     platform: str,
     identifier: str,
+    user_id: str,
+    brand_id: Optional[str] = None,
+    handle_id: Optional[str] = None,
     limit: int = 10,
     days_back: Optional[int] = None,
     category: Optional[str] = None,
@@ -294,6 +488,7 @@ def scrape_social_media(
     min_comments: Optional[int] = None,
     api_token: Optional[str] = None,
     api_key: Optional[str] = None,
+    save_to_db: bool = True,
     **kwargs
 ) -> Dict[str, Any]:
     """
@@ -302,6 +497,9 @@ def scrape_social_media(
     Args:
         platform (str): Platform name ('instagram', 'linkedin', 'youtube', 'reddit')
         identifier (str): Username, profile URL, or subreddit name
+        user_id (str): User ID for database storage
+        brand_id (str, optional): Brand ID if scraping for a specific brand
+        handle_id (str, optional): Handle ID from brands.handles
         limit (int): Maximum number of results to fetch (default: 10)
         days_back (int, optional): Number of days to look back for content
         category (str, optional): Category for Reddit ('hot', 'rising', 'new', 'top')
@@ -309,6 +507,7 @@ def scrape_social_media(
         min_comments (int, optional): Minimum comments for Reddit posts
         api_token (str, optional): API token for Apify services
         api_key (str, optional): API key for YouTube
+        save_to_db (bool): Whether to save scraped data to database (default: True)
         **kwargs: Additional platform-specific parameters
         
     Returns:
@@ -324,14 +523,29 @@ def scrape_social_media(
         raise ValueError(f"Unsupported platform: {platform}. Supported platforms: {SUPPORTED_PLATFORMS}")
     
     try:
+        # Scrape data from the platform
         if platform == 'instagram':
-            return scrape_instagram(identifier, limit, days_back, api_token, **kwargs)
+            result = scrape_instagram(identifier, limit, days_back, api_token, **kwargs)
         elif platform == 'linkedin':
-            return scrape_linkedin(identifier, limit, api_token, **kwargs)
+            result = scrape_linkedin(identifier, limit, api_token, **kwargs)
         elif platform == 'youtube':
-            return scrape_youtube(identifier, limit, days_back, api_key, **kwargs)
+            result = scrape_youtube(identifier, limit, days_back, api_key, **kwargs)
         elif platform == 'reddit':
-            return scrape_reddit(identifier, limit, category, min_score, min_comments, **kwargs)
+            result = scrape_reddit(identifier, limit, category, min_score, min_comments, **kwargs)
+        
+        # Save to database if scraping was successful and save_to_db is True
+        if result.get('success') and save_to_db and result.get('data'):
+            await save_scraped_data_to_db(
+                result['data'], 
+                platform, 
+                user_id, 
+                brand_id, 
+                handle_id,
+                result.get('method_used', 'unknown')
+            )
+        
+        return result
+        
     except Exception as e:
         return {
             'success': False,
@@ -340,4 +554,66 @@ def scrape_social_media(
             'identifier': identifier,
             'timestamp': datetime.now().isoformat()
         }
+
+
+async def save_scraped_data_to_db(
+    data: List[Dict[str, Any]], 
+    platform: str, 
+    user_id: str, 
+    brand_id: Optional[str] = None,
+    handle_id: Optional[str] = None,
+    source: str = "unknown"
+) -> List[str]:
+    """
+    Save scraped data to MongoDB with normalized format.
+    
+    Args:
+        data: List of scraped post/video data
+        platform: Platform name
+        user_id: User ID
+        brand_id: Optional brand ID
+        handle_id: Optional handle ID
+        source: Scraping method used
+        
+    Returns:
+        List of inserted document IDs
+    """
+    try:
+        platform_enum = PlatformType(platform.lower())
+        posts_to_save = []
+        
+        for item in data:
+            # Normalize the platform-specific data
+            normalized = await social_media_db.normalize_scraped_post(item, platform_enum)
+            
+            # Create scraped post document
+            post_doc = {
+                "user_id": user_id,
+                "brand_id": brand_id,
+                "handle_id": handle_id,
+                "platform": platform_enum.value,
+                "source": source,
+                "platform_data": item,  # Keep original platform-specific data
+                "normalized": normalized,
+                "processing": {
+                    "status": ProcessingStatus.NORMALIZED.value,
+                    "pipeline": f"{platform}-v1",
+                    "normalized_at": datetime.utcnow()
+                },
+                "metadata": {}
+            }
+            
+            posts_to_save.append(post_doc)
+        
+        # Save all posts in batch
+        if posts_to_save:
+            saved_ids = await social_media_db.save_scraped_posts_batch(posts_to_save)
+            print(f"Saved {len(saved_ids)} {platform} posts to database")
+            return saved_ids
+        
+        return []
+        
+    except Exception as e:
+        print(f"Error saving {platform} data to database: {str(e)}")
+        return []
 

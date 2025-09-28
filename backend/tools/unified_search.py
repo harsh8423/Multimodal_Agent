@@ -384,3 +384,35 @@ def format_search_results(results: Dict[str, Any], max_items_per_platform: int =
             return "\n".join(output)
         else:
             return f"Search failed: {results.get('error', 'Unknown error')}"
+
+
+# Wrapper function for tool router
+def unified_search(platform: str, query: str, limit: int = 10, days_back: Optional[int] = None, 
+                   search_type: Optional[str] = None, api_token: Optional[str] = None, 
+                   api_key: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+    """
+    Wrapper function for search_social_media to match tool router expectations.
+    
+    Args:
+        platform: Platform to search ('instagram', 'youtube', or 'reddit')
+        query: Search query string
+        limit: Maximum number of results to fetch (default: 10)
+        days_back: Number of days to look back for content
+        search_type: Type of search for Instagram ('hashtag' or 'user')
+        api_token: API token for Apify services (Instagram)
+        api_key: API key for YouTube
+        **kwargs: Additional platform-specific parameters
+        
+    Returns:
+        Dict containing search results and metadata
+    """
+    return search_social_media(
+        platform=platform,
+        query=query,
+        limit=limit,
+        days_back=days_back,
+        search_type=search_type,
+        api_token=api_token,
+        api_key=api_key,
+        **kwargs
+    )

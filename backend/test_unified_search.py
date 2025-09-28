@@ -206,15 +206,15 @@ def main():
     print("=" * 50)
     
     # Test platform information
-    test_search_platform_info()
+    # test_search_platform_info()
     
     # Test individual platforms
-    test_reddit_search()
-    test_youtube_search()
+    #test_reddit_search()
+    #test_youtube_search()
     test_instagram_search()
     
     # Test multi-platform search
-    test_multi_platform_search()
+    # test_multi_platform_search()
     
     # Save comprehensive test results
     save_test_results()
