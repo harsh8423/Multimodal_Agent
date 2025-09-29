@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 import asyncio
+from bson import ObjectId
 
 from services.social_media_db import social_media_db
 from models.social_media import PlatformType, ProcessingStatus
@@ -59,6 +60,7 @@ class ScrapedPostResponse(BaseModel):
     platform_data: Dict[str, Any]
     normalized: NormalizedPostResponse
     processing: ProcessingInfoResponse
+    important: bool
     metadata: Dict[str, Any]
 
     class Config:
@@ -202,7 +204,7 @@ async def get_scraped_post(
         # Get post from database
         db = await social_media_db.get_db()
         post = await db.scraped_posts.find_one({
-            "_id": post_id,
+            "_id": ObjectId(post_id),
             "user_id": user_id
         })
         
@@ -221,6 +223,7 @@ async def get_scraped_post(
             "platform_data": post["platform_data"],
             "normalized": post["normalized"],
             "processing": post["processing"],
+            "important": post.get("important", False),
             "metadata": post.get("metadata", {})
         }
         
@@ -248,7 +251,7 @@ async def delete_scraped_post(
         # Check if post exists and user owns it
         db = await social_media_db.get_db()
         post = await db.scraped_posts.find_one({
-            "_id": post_id,
+            "_id": ObjectId(post_id),
             "user_id": user_id
         })
         
@@ -256,7 +259,7 @@ async def delete_scraped_post(
             raise HTTPException(status_code=404, detail="Post not found")
         
         # Delete post
-        result = await db.scraped_posts.delete_one({"_id": post_id})
+        result = await db.scraped_posts.delete_one({"_id": ObjectId(post_id)})
         if result.deleted_count == 0:
             raise HTTPException(status_code=500, detail="Failed to delete post")
         
@@ -449,7 +452,7 @@ async def bulk_delete_posts(
         # Delete posts
         db = await social_media_db.get_db()
         result = await db.scraped_posts.delete_many({
-            "_id": {"$in": post_ids},
+            "_id": {"$in": [ObjectId(pid) for pid in post_ids]},
             "user_id": user_id
         })
         
@@ -550,3 +553,64 @@ async def advanced_search_posts(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to search posts: {str(e)}")
+
+
+@router.patch("/{post_id}/important", response_model=ScrapedPostResponse)
+async def toggle_important_status(
+    post_id: str,
+    important: bool = Query(..., description="Whether to mark the post as important"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Toggle the important status of a scraped post.
+    
+    - **post_id**: Post ID
+    - **important**: Whether to mark the post as important
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # Check if post exists and user owns it
+        db = await social_media_db.get_db()
+        post = await db.scraped_posts.find_one({
+            "_id": ObjectId(post_id),
+            "user_id": user_id
+        })
+        
+        if not post:
+            raise HTTPException(status_code=404, detail="Post not found")
+        
+        # Update important status
+        result = await db.scraped_posts.update_one(
+            {"_id": ObjectId(post_id)},
+            {"$set": {"important": important}}
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=500, detail="Failed to update post")
+        
+        # Get updated post
+        updated_post = await db.scraped_posts.find_one({"_id": ObjectId(post_id)})
+        
+        # Convert to response format
+        post_dict = {
+            "id": str(updated_post["_id"]),
+            "user_id": updated_post["user_id"],
+            "brand_id": updated_post.get("brand_id"),
+            "handle_id": updated_post.get("handle_id"),
+            "platform": updated_post["platform"],
+            "source": updated_post["source"],
+            "scraped_at": updated_post["scraped_at"],
+            "platform_data": updated_post["platform_data"],
+            "normalized": updated_post["normalized"],
+            "processing": updated_post["processing"],
+            "important": updated_post.get("important", False),
+            "metadata": updated_post.get("metadata", {})
+        }
+        
+        return ScrapedPostResponse(**post_dict)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update post: {str(e)}")

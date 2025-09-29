@@ -45,10 +45,45 @@ def extract_unified_linkedin_metadata(linkedin_data: dict) -> dict:
         author = linkedin_data.get('author', {})
         metadata['username'] = author.get('authorName', author.get('firstName', '') + ' ' + author.get('lastName', '')).strip()
         
-        # Extract media URLs (coverPages)
-        document = linkedin_data.get('document', {})
-        cover_pages = document.get('coverPages', [])
-        metadata['media_urls'] = cover_pages if cover_pages else []
+        # Extract media URLs from multiple possible fields
+        media_urls = []
+        
+        # Try postImages first (from Apify scraper)
+        post_images = linkedin_data.get('postImages', [])
+        if post_images:
+            for img_obj in post_images:
+                if isinstance(img_obj, dict) and 'url' in img_obj:
+                    media_urls.append(img_obj['url'])
+                elif isinstance(img_obj, str):
+                    media_urls.append(img_obj)
+        
+        # Try coverPages as fallback
+        if not media_urls:
+            document = linkedin_data.get('document', {})
+            cover_pages = document.get('coverPages', [])
+            if cover_pages:
+                media_urls.extend(cover_pages)
+        
+        # Try other possible media fields
+        if not media_urls:
+            # Check for images array
+            images = linkedin_data.get('images', [])
+            if images:
+                media_urls.extend(images)
+            
+            # Check for media array
+            media = linkedin_data.get('media', [])
+            if media:
+                for media_item in media:
+                    if isinstance(media_item, dict):
+                        if 'url' in media_item:
+                            media_urls.append(media_item['url'])
+                        elif 'src' in media_item:
+                            media_urls.append(media_item['src'])
+                    elif isinstance(media_item, str):
+                        media_urls.append(media_item)
+        
+        metadata['media_urls'] = media_urls
         
     except Exception as e:
         print(f"Warning: Error extracting LinkedIn metadata: {e}")
@@ -151,7 +186,8 @@ def search_linkedin_with_apify(search_url: str, search_limit: int = 1, api_token
         unified_metadata = extract_unified_linkedin_metadata(data[0])
         
         # Download media files
-        downloaded_files = download_linkedin_media(unified_metadata.get('media_urls', []))
+        media_urls = unified_metadata.get('media_urls', [])
+        downloaded_files = download_linkedin_media(media_urls)
         
         # Save metadata to JSON file
         if downloaded_files or unified_metadata.get('caption'):
@@ -160,13 +196,21 @@ def search_linkedin_with_apify(search_url: str, search_limit: int = 1, api_token
             with open(metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(unified_metadata, f, indent=2, ensure_ascii=False)
         
-        return {
+        # Add debug information
+        result = {
             'success': True,
             'files': downloaded_files,
             'method': 'linkedin_scraper',
             'metadata': unified_metadata,
-            'caption': unified_metadata.get('caption', '')
+            'caption': unified_metadata.get('caption', ''),
+            'debug_info': {
+                'media_urls_found': len(media_urls),
+                'media_urls': media_urls[:3],  # Show first 3 URLs for debugging
+                'files_downloaded': len(downloaded_files)
+            }
         }
+        
+        return result
         
     except Exception as e:
         return {

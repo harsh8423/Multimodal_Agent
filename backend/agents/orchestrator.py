@@ -346,7 +346,11 @@ async def orchestrator(
             f"Original user message: {user_text}\n\n"
             f"Agent used: {agent_name}\n"
             f"Agent result: {json.dumps(result)}\n\n"
-            "Continue executing the plan using the planner. If more agent work is required, set agent_required true with the next agent and a concise agent_query. If finished, set agent_required false and provide self_response."
+            "CRITICAL INSTRUCTION: The agent has completed its task successfully. You MUST now:\n"
+            "1. Set agent_required to FALSE\n"
+            "2. Provide a comprehensive final response in the self_response field\n"
+            "3. Do NOT call any more agents\n\n"
+            "The agent result above contains the data needed to answer the original user message. Process this data and return a user-friendly response."
         )
 
         if session_context:

@@ -1,6 +1,7 @@
 import os
 import importlib
 import inspect
+import asyncio
 from typing import Any, Dict, Optional
 from dotenv import load_dotenv
 
@@ -13,9 +14,6 @@ API_KEY_MAPPINGS = {
     "search_with_perplexity_sonar": "PERPLEXITY_API_KEY", 
     "gemini_google_search": "GEMINI_API_KEY",
     "search_instagram_with_apify": "APIFY_API_TOKEN",
-    "google_sheet_reader": "GOOGLE_SHEETS_API_KEY",
-    "google_sheet_append": None,  # Uses service account
-    "google_sheet_update": None,  # Uses service account
     "unified_search": "APIFY_API_TOKEN",  # For Instagram searches
     "get_media": None,  # No API key required
 }
@@ -35,7 +33,7 @@ def get_api_key(tool_name: str) -> Optional[str]:
         return None
     return os.getenv(env_var)
 
-def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
+async def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
     """
     Dynamically route tool calls to the appropriate tool function in the tools directory.
     
@@ -68,9 +66,9 @@ def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
         if hasattr(tools_module, tool_name):
             tool_function = getattr(tools_module, tool_name)
         else:
-            # Try importing from google_sheets module
+            # Try importing from user_data_tools module
             try:
-                tools_module = importlib.import_module("tools.google_sheets")
+                tools_module = importlib.import_module("tools.user_data_tools")
                 if hasattr(tools_module, tool_name):
                     tool_function = getattr(tools_module, tool_name)
                 else:
@@ -96,31 +94,27 @@ def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
                                 else:
                                     raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
             except ImportError as e:
-                # If google_sheets import fails (due to missing service_account.json), try other modules
-                if "service_account.json" in str(e):
-                    # Try importing from gemini_image module
-                    tools_module = importlib.import_module("tools.gemini_image")
+                # Try importing from gemini_image module
+                tools_module = importlib.import_module("tools.gemini_image")
+                if hasattr(tools_module, tool_name):
+                    tool_function = getattr(tools_module, tool_name)
+                else:
+                    # Try importing from gemini_video module
+                    tools_module = importlib.import_module("tools.gemini_video")
                     if hasattr(tools_module, tool_name):
                         tool_function = getattr(tools_module, tool_name)
                     else:
-                        # Try importing from gemini_video module
-                        tools_module = importlib.import_module("tools.gemini_video")
+                        # Try importing from unified_search module
+                        tools_module = importlib.import_module("tools.unified_search")
                         if hasattr(tools_module, tool_name):
                             tool_function = getattr(tools_module, tool_name)
                         else:
-                            # Try importing from unified_search module
-                            tools_module = importlib.import_module("tools.unified_search")
+                            # Try importing from get_media module
+                            tools_module = importlib.import_module("tools.get_media")
                             if hasattr(tools_module, tool_name):
                                 tool_function = getattr(tools_module, tool_name)
                             else:
-                                # Try importing from get_media module
-                                tools_module = importlib.import_module("tools.get_media")
-                                if hasattr(tools_module, tool_name):
-                                    tool_function = getattr(tools_module, tool_name)
-                                else:
-                                    raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
-                else:
-                    raise
+                                raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
         
         # Get function signature to determine required parameters
         sig = inspect.signature(tool_function)
@@ -140,7 +134,11 @@ def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
             tool_args["api_key"] = api_key
         
         # Call the tool function with prepared arguments
-        result = tool_function(**tool_args)
+        # Check if the function is async
+        if asyncio.iscoroutinefunction(tool_function):
+            result = await tool_function(**tool_args)
+        else:
+            result = tool_function(**tool_args)
         
         return result
         
@@ -150,6 +148,92 @@ def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
         raise AttributeError(f"Tool function not found: {e}")
     except Exception as e:
         raise Exception(f"Tool execution failed: {e}")
+
+def tool_router_sync(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
+    """
+    Synchronous wrapper for the async tool_router function.
+    This duplicates the core logic to avoid async/await issues.
+    """
+    try:
+        # Handle case where input_schema_fields is a list of dictionaries
+        if isinstance(input_schema_fields, list):
+            # Merge all dictionaries in the list
+            merged_fields = {}
+            for item in input_schema_fields:
+                if isinstance(item, dict):
+                    merged_fields.update(item)
+            input_schema_fields = merged_fields
+        
+        # Import the tools module dynamically
+        tools_module = importlib.import_module("tools.research")
+        
+        # Check if tool exists in research module
+        if hasattr(tools_module, tool_name):
+            tool_function = getattr(tools_module, tool_name)
+        else:
+            # Try importing from user_data_tools module
+            try:
+                tools_module = importlib.import_module("tools.user_data_tools")
+                if hasattr(tools_module, tool_name):
+                    tool_function = getattr(tools_module, tool_name)
+                else:
+                    # Try other modules
+                    for module_name in ["tools.gemini_image", "tools.gemini_video", "tools.unified_search", "tools.get_media"]:
+                        try:
+                            tools_module = importlib.import_module(module_name)
+                            if hasattr(tools_module, tool_name):
+                                tool_function = getattr(tools_module, tool_name)
+                                break
+                        except ImportError:
+                            continue
+                    else:
+                        raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+            except ImportError:
+                raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+        
+        # Get function signature to determine required parameters
+        sig = inspect.signature(tool_function)
+        params = list(sig.parameters.keys())
+        
+        # Prepare arguments for the tool function
+        tool_args = {}
+        
+        # Add input schema fields
+        for key, value in input_schema_fields.items():
+            if key in params:
+                tool_args[key] = value
+        
+        # Add API key if the tool requires it
+        api_key = get_api_key(tool_name)
+        if api_key and "api_key" in params:
+            tool_args["api_key"] = api_key
+        
+        # Call the tool function with prepared arguments
+        # Check if the function is async
+        if asyncio.iscoroutinefunction(tool_function):
+            # For async functions, we need to run them in a new event loop
+            import concurrent.futures
+            import threading
+            
+            def run_async_tool():
+                new_loop = asyncio.new_event_loop()
+                try:
+                    return new_loop.run_until_complete(tool_function(**tool_args))
+                finally:
+                    new_loop.close()
+            
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_async_tool)
+                return future.result()
+        else:
+            return tool_function(**tool_args)
+        
+    except ImportError as e:
+        return {"success": False, "error": f"Failed to import tools module: {e}", "brands": []}
+    except AttributeError as e:
+        return {"success": False, "error": f"Tool function not found: {e}", "brands": []}
+    except Exception as e:
+        return {"success": False, "error": f"Tool execution failed: {e}", "brands": []}
 
 def get_available_tools() -> list:
     """
@@ -169,12 +253,12 @@ def get_available_tools() -> list:
     except ImportError:
         pass
     
-    # Check google_sheets tools
+    # Check user_data_tools
     try:
-        sheets_module = importlib.import_module("tools.google_sheets")
-        sheets_tools = [name for name, obj in inspect.getmembers(sheets_module) 
-                       if inspect.isfunction(obj) and not name.startswith('_')]
-        available_tools.extend(sheets_tools)
+        user_data_module = importlib.import_module("tools.user_data_tools")
+        user_data_tools = [name for name, obj in inspect.getmembers(user_data_module) 
+                          if inspect.isfunction(obj) and not name.startswith('_')]
+        available_tools.extend(user_data_tools)
     except ImportError:
         pass
     

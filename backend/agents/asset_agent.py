@@ -2,22 +2,27 @@
 from typing import Any, Optional
 from pathlib import Path
 from utils.build_prompts import build_system_prompt
-from utils.utility import _call_openai_chatmodel, _normalize_model_output
+from utils.utility import _call_openai_chatmodel, _normalize_model_output, _call_gemini_chatmodel
+from utils.tool_router import tool_router
 from utils.session_memory import SessionContext
 from utils.mongo_store import save_chat_message
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 
-async def asset_agent(query: str, model_name: str = "gpt-5-mini",
+async def asset_agent(query: str, model_name: str = "gemini-2.5-flash",
                       registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
-                      max_iterations: int = 5) -> Any:
+                      max_iterations: int = 5, user_id: Optional[str] = None) -> Any:
     """
-    Build asset_agent system prompt from registry and call the chat model with the query.
-    Prints and returns the model response.
+    Asset agent for managing and retrieving user data including brands, competitors, scraped posts, and templates.
+    Uses flexible function-based tools to handle various data retrieval and multi-task operations.
     """
     # Log asset agent start
     if session_context:
         await session_context.add_log("asset_agent_started", f"Asset agent processing query: {query[:100]}...")
+
+    # Extract user_id from session context if not provided
+    if not user_id and session_context:
+        user_id = getattr(session_context, 'user_id', None)
 
     if registry_path is None:
         registry_path = Path(__file__).parent.parent / DEFAULT_REGISTRY_FILENAME
@@ -71,6 +76,10 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
     system_prompt = build_system_prompt("asset_agent", str(registry_path),
                                         extra_instructions="{place_holder}")
     
+    # Add user_id information to the system prompt
+    if user_id:
+        system_prompt += f"\n\nIMPORTANT: The current user_id is: {user_id}. Always use this exact user_id in all tool calls."
+    
     # Add memory context to system prompt if available
     if asset_memory_context:
         system_prompt += f"\n\n{asset_memory_context}"
@@ -92,7 +101,7 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
             {"phase": "analysis", "query": query[:100], "agent_type": "asset"}
         )
 
-    raw = await _call_openai_chatmodel(system_prompt, query, model_name)
+    raw = await _call_gemini_chatmodel(system_prompt, query, model_name)
     normalized = await _normalize_model_output(raw)
 
     # Log model response
@@ -121,8 +130,11 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
 
         while True:
             needs_tool = bool(agent_state.get("tool_required", False)) if isinstance(agent_state, dict) else False
+            print(f"=== ASSET_AGENT: Loop iteration {iteration}, needs_tool: {needs_tool} ===")
+            print(f"=== ASSET_AGENT: agent_state: {agent_state} ===")
 
             if not needs_tool:
+                print(f"=== ASSET_AGENT: No tool required, returning response ===")
                 if session_context:
                     await session_context.add_log("no_tool_required", "Asset agent determined no tool needed")
                     await session_context.append_and_persist_memory(
@@ -136,14 +148,20 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
                         {"response_type": "direct", "used_tool": None}
                     )
                 if isinstance(agent_state, dict):
+                    print(f"=== ASSET_AGENT: Returning agent_state dict: {agent_state} ===")
+                    print(f"=== ASSET_AGENT: FINAL RETURN TO ORCHESTRATOR: {agent_state} ===")
                     return agent_state
+                
+                print("=== ASSET_AGENT: direct response ===")
+                print(last_normalized)
+                print("=== ASSET_AGENT: end direct response ===")
                 return {"text": str(last_normalized)}
 
             if iteration >= max_iterations:
                 warning_msg = f"Max iterations ({max_iterations}) reached in asset_agent; returning best-effort response."
                 print(warning_msg)
                 if session_context:
-                    await session_context.add_log("warning", warning_msg, level="warning")
+                    await session_context.send_nano("warning", warning_msg, level="warning")
                 return {"text": str(last_normalized)}
 
             tool_name = agent_state.get("tool_name")
@@ -158,41 +176,100 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
 
             # Log tool call
             if session_context:
-                await session_context.add_log("tool_call", f"Calling tool: {tool_name}")
+                await session_context.send_nano("tool_call", f"Calling tool: {tool_name}")
                 await session_context.append_and_persist_memory(
                     "asset_agent",
                     f"Tool call decision: {tool_name} with parameters: {input_schema_fields}",
                     {"phase": "tool_call", "tool_name": tool_name, "parameters": input_schema_fields}
                 )
 
-            # Inline import to avoid unused import warnings when no tool calls
-            from utils.tool_router import tool_router as _tool_router
-            tool_result = _tool_router(tool_name, input_schema_fields)
+            # Add user_id to input_schema_fields if not present
+            if user_id and isinstance(input_schema_fields, dict) and "user_id" not in input_schema_fields:
+                input_schema_fields["user_id"] = user_id
+            
+            # Call the tool using tool_router
+            try:
+                print(f"=== ASSET_AGENT: Calling tool {tool_name} with params: {input_schema_fields} ===")
+                tool_result = await tool_router(tool_name, input_schema_fields)
+                print("=== ASSET_AGENT: tool_result ===")
+                print(tool_result)
+                print("=== ASSET_AGENT: end tool_result ===")
+            except Exception as tool_error:
+                # If tool fails, return error response instead of continuing loop
+                error_response = {
+                    "text": f"Error executing tool {tool_name}: {str(tool_error)}",
+                    "tool_required": False,
+                    "error": True
+                }
+                if session_context:
+                    await session_context.add_log("tool_error", f"Tool {tool_name} failed: {str(tool_error)}", level="error")
+                return error_response
+
+            # Check if tool returned an error
+            if isinstance(tool_result, dict) and tool_result.get("success") is False:
+                # Tool returned an error, stop the loop and return the error
+                error_response = {
+                    "text": f"Tool {tool_name} returned an error: {tool_result.get('error', 'Unknown error')}",
+                    "tool_required": False,
+                    "error": True
+                }
+                if session_context:
+                    await session_context.add_log("tool_error", f"Tool {tool_name} returned error: {tool_result.get('error')}", level="error")
+                print(f"=== ASSET_AGENT: RETURNING ERROR RESPONSE: {error_response} ===")
+                return error_response
 
             if session_context:
                 await session_context.add_log("tool_result", f"Tool {tool_name} completed successfully")
+                
+                # Create JSON serializable version of tool_result
+                def json_serializable(obj):
+                    if hasattr(obj, 'isoformat'):  # datetime objects
+                        return obj.isoformat()
+                    elif hasattr(obj, '__dict__'):
+                        return str(obj)
+                    else:
+                        return str(obj)
+                
+                try:
+                    tool_result_json = __import__('json').dumps(tool_result, indent=2, default=json_serializable)
+                except Exception as json_error:
+                    print(f"=== ASSET_AGENT: JSON serialization error: {json_error}, using string representation ===")
+                    tool_result_json = str(tool_result)
+                
                 await session_context.append_and_persist_memory(
                     "asset_agent",
-                    f"Tool {tool_name} result: {__import__('json').dumps(tool_result, indent=2)[:300]}...",
+                    f"Tool {tool_name} result: {tool_result_json[:300]}...",
                     {"phase": "tool_result", "tool_name": tool_name, "success": True, "result_type": "tool_output"}
                 )
                 if session_context.chat_id:
                     await save_chat_message(
                         chat_id=session_context.chat_id,
                         role="tool",
-                        content=__import__('json').dumps(tool_result, indent=2),
+                        content=tool_result_json,
                         agent="asset_agent"
                     )
 
             # Ask model for the next step
+            # Create JSON serializable version for the follow-up query
+            try:
+                tool_result_for_query = __import__('json').dumps(tool_result, indent=2, default=json_serializable)
+            except Exception:
+                tool_result_for_query = str(tool_result)
+                
             follow_up_query = f"""
             Original asset query: {query}
 
             Tool used: {tool_name}
-            Tool result: {__import__('json').dumps(tool_result, indent=2)}
+            Tool result: {tool_result_for_query}
 
-            Continue executing the plan. If more tool calls are needed, set tool_required true with the next tool and inputs. If finished, set tool_required false and provide final text.
-            """
+            CRITICAL INSTRUCTION: If the tool has been executed successfully and contains the result, you MUST now:
+            1. Set tool_required to FALSE
+            2. Provide a comprehensive final response in the 'text' field that directly answers the user's query
+            3. Update the planner step status to 'completed'
+            4. Do NOT call any more tools
+"""
+
+            print(f"=== ASSET_AGENT: Follow-up query: {follow_up_query} ===")
 
             if session_context:
                 await session_context.add_log("model_call", "Asset agent processing tool result")
@@ -202,33 +279,52 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
                     {"phase": "follow_up", "tool_name": tool_name, "query": query[:100]}
                 )
 
-            next_raw = await _call_openai_chatmodel(system_prompt, follow_up_query, model_name)
-            next_normalized = await _normalize_model_output(next_raw)
+            print(f"=== ASSET_AGENT: Calling follow-up model with query: {follow_up_query[:200]}... ===")
+            try:
+                next_raw = await _call_gemini_chatmodel(system_prompt, follow_up_query, model_name)
+                print(f"=== ASSET_AGENT: Raw model response: {next_raw} ===")
+            except Exception as model_error:
+                print(f"=== ASSET_AGENT: MODEL CALL ERROR: {model_error} ===")
+                raise model_error
+                
+            try:
+                next_normalized = await _normalize_model_output(next_raw)
+                print(f"=== ASSET_AGENT: Normalized model response: {next_normalized} ===")
+            except Exception as normalize_error:
+                print(f"=== ASSET_AGENT: NORMALIZE ERROR: {normalize_error} ===")
+                raise normalize_error
+                
             last_normalized = next_normalized
 
             if session_context:
-                await session_context.add_log("model_response", "Asset agent iteration response generated")
                 await session_context.append_and_persist_memory(
                     "asset_agent",
                     f"Follow-up model response: {str(next_normalized)[:200]}...",
                     {"phase": "follow_up", "response_type": "model_iteration", "tool_name": tool_name}
                 )
 
-            print("=== asset_agent iteration response ===")
-            print(next_normalized)
-            print("=== end asset_agent iteration response ===")
 
             if isinstance(next_normalized, str):
                 try:
                     agent_state = __import__("json").loads(next_normalized)
-                except Exception:
+                    print(f"=== ASSET_AGENT: Successfully parsed JSON agent_state: {agent_state} ===")
+                except Exception as parse_error:
+                    print(f"=== ASSET_AGENT: JSON parse failed: {parse_error}, using fallback ===")
                     agent_state = {"tool_required": False, "text": str(next_normalized)}
             else:
                 agent_state = next_normalized
 
+      
             iteration += 1
     except Exception as e:
         # Fall back to returning the first normalized response
+        print(f"=== ASSET_AGENT: EXCEPTION OCCURRED: {type(e).__name__}: {str(e)} ===")
+        import traceback
+        print(f"=== ASSET_AGENT: EXCEPTION TRACEBACK: ===")
+        traceback.print_exc()
+        print(f"=== ASSET_AGENT: END TRACEBACK ===")
+        
         if session_context:
             await session_context.add_log("error", f"Asset agent loop error: {e}", level="error")
+        print(f"=== ASSET_AGENT: EXCEPTION FALLBACK RETURN: {normalized} ===")
         return normalized

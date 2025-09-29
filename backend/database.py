@@ -3,6 +3,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
 from typing import Optional
 import asyncio
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 class Database:
     client: Optional[AsyncIOMotorClient] = None
@@ -12,6 +16,8 @@ database = Database()
 
 async def get_database() -> AsyncIOMotorClient:
     """Get database instance"""
+    if database.database is None:
+        await connect_to_mongo()
     return database.database
 
 async def connect_to_mongo():

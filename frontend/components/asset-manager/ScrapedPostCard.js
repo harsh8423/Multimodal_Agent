@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { socialMediaUtils } from '@/lib/api/socialMedia';
 
-export default function ScrapedPostCard({ post, brands, selected, onSelect, onDelete }) {
+export default function ScrapedPostCard({ post, brands, selected, onSelect, onDelete, onToggleImportant }) {
   const [showActions, setShowActions] = useState(false);
 
   const brand = brands.find(b => b.id === post.brand_id);
@@ -36,6 +36,22 @@ export default function ScrapedPostCard({ post, brands, selected, onSelect, onDe
                 onChange={(e) => onSelect(post.id, e.target.checked)}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleImportant(post.id, !post.important);
+                }}
+                className={`p-1 rounded-full transition-colors ${
+                  post.important 
+                    ? 'text-yellow-500 hover:text-yellow-600' 
+                    : 'text-gray-300 hover:text-yellow-500'
+                }`}
+                title={post.important ? 'Mark as not important' : 'Mark as important'}
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              </button>
               <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white ${socialMediaUtils.getPlatformColor(post.platform)}`}>
                 {socialMediaUtils.formatPlatform(post.platform)}
               </span>

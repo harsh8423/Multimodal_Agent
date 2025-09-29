@@ -33,13 +33,43 @@ def process_media_file_to_cloudinary(file_path: str, platform: str, content_type
     Upload a single media file to Cloudinary and return metadata.
     
     Args:
-        file_path: Path to the media file
+        file_path: Path to the media file or URL
         platform: Platform name (youtube, instagram, linkedin)
         content_type: Content type (video, image)
         
     Returns:
         Dictionary with Cloudinary URL and metadata, or None if failed
     """
+    # Handle URL case (for thumbnails)
+    if file_path.startswith('http'):
+        try:
+            import requests
+            import tempfile
+            
+            # Download the URL to a temporary file
+            response = requests.get(file_path, timeout=30)
+            response.raise_for_status()
+            
+            # Create temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+                temp_file.write(response.content)
+                temp_file_path = temp_file.name
+            
+            # Process the temporary file
+            result = process_media_file_to_cloudinary(temp_file_path, platform, content_type)
+            
+            # Clean up temporary file
+            try:
+                os.remove(temp_file_path)
+            except OSError:
+                pass
+                
+            return result
+            
+        except Exception as e:
+            print(f"Error downloading URL {file_path}: {str(e)}")
+            return None
+    
     if not os.path.exists(file_path):
         print(f"File not found: {file_path}")
         return None
@@ -711,6 +741,18 @@ def download_video(url: str, custom_config: Optional[Dict[str, Any]] = None, upl
             if processed_media['cloudinary_urls']:
                 result['cloudinary_urls'] = [media['cloudinary_url'] for media in processed_media['cloudinary_urls']]
                 result['files'] = [media['cloudinary_url'] for media in processed_media['cloudinary_urls']]
+                
+                # For YouTube, also process thumbnail URL if available in metadata
+                if 'youtube' in content_type and result.get('metadata', {}).get('thumbnail'):
+                    thumbnail_url = result['metadata']['thumbnail']
+                    if thumbnail_url and not 'cloudinary.com' in thumbnail_url:
+                        # Process thumbnail separately
+                        thumbnail_cloudinary = process_media_file_to_cloudinary(
+                            thumbnail_url, 'youtube', 'image'
+                        )
+                        if thumbnail_cloudinary:
+                            result['metadata']['thumbnail'] = thumbnail_cloudinary['cloudinary_url']
+                            result['cloudinary_media']['thumbnail_processed'] = True
         
         return result
 

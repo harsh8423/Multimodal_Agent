@@ -127,7 +127,18 @@ async def social_media_search_agent(query: str, model_name: str = "gpt-4o",
         last_normalized: Any = normalized
 
         while True:
-            needs_tool = bool(agent_response.get("tool_required", False)) if isinstance(agent_response, dict) else False
+            # Validate agent response structure
+            if not isinstance(agent_response, dict):
+                print(f"Warning: Agent response is not a dict: {type(agent_response)}")
+                return {"text": str(last_normalized)}
+            
+            needs_tool = bool(agent_response.get("tool_required", False))
+            tool_name = agent_response.get("tool_name")
+            
+            # Check if we have a valid tool call
+            if needs_tool and not tool_name:
+                print("Warning: tool_required is True but no tool_name provided")
+                return {"text": str(last_normalized)}
 
             if not needs_tool:
                 # No tool required, return the current response
@@ -138,9 +149,7 @@ async def social_media_search_agent(query: str, model_name: str = "gpt-4o",
                         f"Direct response (without tool): {str(last_normalized)[:200]}...",
                         {"response_type": "direct", "used_tool": None}
                     )
-                if isinstance(agent_response, dict):
-                    return agent_response
-                return {"text": str(last_normalized)}
+                return agent_response
 
             # Guard against infinite loops
             if iteration >= max_iterations:
@@ -150,7 +159,6 @@ async def social_media_search_agent(query: str, model_name: str = "gpt-4o",
                     await session_context.send_nano("social_media_search_agent", "Max iterations reached: showing last message")
                 return {"text": str(last_normalized)}
 
-            tool_name = agent_response.get("tool_name")
             input_schema_fields = agent_response.get("input_schema_fields", {})
 
             # Normalize input_schema_fields if list of objects was provided
@@ -160,6 +168,11 @@ async def social_media_search_agent(query: str, model_name: str = "gpt-4o",
                     if isinstance(item, dict):
                         merged.update(item)
                 input_schema_fields = merged
+            
+            # Validate input_schema_fields
+            if not isinstance(input_schema_fields, dict):
+                print(f"Warning: input_schema_fields is not a dict: {type(input_schema_fields)}")
+                return {"text": str(last_normalized)}
 
             # Log tool call
             if session_context:
@@ -173,7 +186,7 @@ async def social_media_search_agent(query: str, model_name: str = "gpt-4o",
                 
 
             # Call the tool using tool_router
-            tool_result = tool_router(tool_name, input_schema_fields)
+            tool_result = await tool_router(tool_name, input_schema_fields)
 
             # Log tool result
             if session_context:
@@ -208,6 +221,8 @@ async def social_media_search_agent(query: str, model_name: str = "gpt-4o",
 
             Tool used: {tool_name}
             Tool result: {json.dumps(tool_result, indent=2)}
+
+            IMPORTANT: Analyze the tool result carefully. If the tool result contains the information needed to answer the original query, set tool_required to false and provide a comprehensive final response. Only set tool_required to true if you genuinely need to call another tool for additional information.
 
             Continue executing the plan using the planner. If more tool calls are needed, set tool_required true with the next tool and inputs. If finished, set tool_required false and provide final text.
             """

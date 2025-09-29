@@ -11,7 +11,10 @@ import {
   Video,
   Zap,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  X,
+  Building2,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +23,9 @@ const ChatInput = ({
   onFileAttach, 
   onVoiceRecord,
   onImagePaste = () => {},
+  onAssetDrop = () => {},
+  attachedAssets = [],
+  onRemoveAsset = () => {},
   placeholder = "Type your message...",
   disabled = false,
   isStreaming = false,
@@ -91,6 +97,47 @@ const ChatInput = ({
     }
   };
 
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    try {
+      const assetData = JSON.parse(e.dataTransfer.getData('application/json'));
+      if (assetData && assetData.type && assetData.asset) {
+        onAssetDrop(assetData);
+      }
+    } catch (error) {
+      console.error('Failed to parse dropped asset data:', error);
+    }
+  };
+
+  const getAssetIcon = (type) => {
+    switch (type) {
+      case 'brands': return Building2;
+      case 'competitors': return Users;
+      case 'templates': return FileText;
+      default: return FileText;
+    }
+  };
+
+  const getAssetDisplayName = (asset, type) => {
+    switch (type) {
+      case 'brands':
+        return asset.name || 'Unnamed Brand';
+      case 'competitors':
+        const username = asset.username || asset.name || 'Unknown';
+        const platform = asset.platform || 'Unknown Platform';
+        return `${username} - ${platform}`;
+      case 'templates':
+        return asset.title || asset.name || 'Unnamed Template';
+      default:
+        return asset.name || asset.title || 'Unnamed Asset';
+    }
+  };
+
   return (
     <>
       <div className="w-full sticky bottom-0 z-20 p-4 sm:p-6">
@@ -153,10 +200,42 @@ const ChatInput = ({
               </div>
             )}
             
-            <div className={cn(
-              "bg-white/90 backdrop-blur-md border border-gray-200/80 shadow-2xl overflow-hidden transition-all duration-300 hover:shadow-3xl hover:border-gray-300/80",
-              nanoStream.length > 0 ? "rounded-b-3xl" : "rounded-3xl"
-            )}>
+            <div 
+              className={cn(
+                "bg-white/90 backdrop-blur-md border border-gray-200/80 shadow-2xl overflow-hidden transition-all duration-300 hover:shadow-3xl hover:border-gray-300/80",
+                nanoStream.length > 0 ? "rounded-b-3xl" : "rounded-3xl"
+              )}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
+              {/* Attached Assets */}
+              {attachedAssets.length > 0 && (
+                <div className="px-4 pt-3 pb-2">
+                  <div className="flex flex-wrap gap-2">
+                    {attachedAssets.map((assetData, index) => {
+                      const IconComponent = getAssetIcon(assetData.type);
+                      return (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-sm"
+                        >
+                          <IconComponent className="w-4 h-4 text-blue-600" />
+                          <span className="text-blue-800 font-medium">
+                            {getAssetDisplayName(assetData.asset, assetData.type)}
+                          </span>
+                          <button
+                            onClick={() => onRemoveAsset(index)}
+                            className="p-0.5 hover:bg-blue-100 rounded transition-colors"
+                          >
+                            <X className="w-3 h-3 text-blue-600" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="flex items-end gap-3 p-4">
                 <button
                   type="button"

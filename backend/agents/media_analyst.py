@@ -160,7 +160,7 @@ async def media_analyst(query: str, model_name: str = "gpt-4o",
             )
 
         # Call the tool using tool_router
-        tool_result = tool_router(tool_name, input_schema_fields)
+        tool_result = await tool_router(tool_name, input_schema_fields)
 
         # Log tool result
         if session_context:

@@ -204,6 +204,7 @@ class ScrapedPost(BaseModel):
     platform_data: Dict[str, Any] = Field(..., description="Platform-specific raw data")
     normalized: NormalizedPost = Field(..., description="Normalized post data")
     processing: ProcessingInfo = Field(..., description="Processing information")
+    important: bool = Field(default=False, description="Whether the post is marked as important")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Extensible metadata")
 
     class Config:
@@ -307,6 +308,7 @@ def scraped_post_helper(post) -> dict:
             "platform_data": post["platform_data"],
             "normalized": post["normalized"],
             "processing": post["processing"],
+            "important": post.get("important", False),
             "metadata": post.get("metadata", {})
         }
     return None

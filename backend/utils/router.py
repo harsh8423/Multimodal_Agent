@@ -39,8 +39,18 @@ async def call_agent(agent_name: str, query: str, model_name: str = "gpt-5-mini"
 
     # Dynamically resolve function by the agent_name (must be defined in this module)
     func = globals()[agent_name]  # KeyError if function not present
+    
+    # Extract user_id from session context for agents that need it
+    user_id = None
+    if session_context:
+        user_id = getattr(session_context, 'user_id', None)
+    
     # call the function (it should be an async function)
-    result = await func(query, model_name=model_name, registry_path=str(registry_path), session_context=session_context)
+    # Pass user_id for asset_agent specifically
+    if agent_name == "asset_agent":
+        result = await func(query, model_name=model_name, registry_path=str(registry_path), session_context=session_context, user_id=user_id)
+    else:
+        result = await func(query, model_name=model_name, registry_path=str(registry_path), session_context=session_context)
     return result
 
 

@@ -297,6 +297,13 @@ export const scrapedPostsAPI = {
     });
     return apiRequest(`/api/scraped-posts/search/advanced?${searchParams.toString()}`);
   },
+
+  // Toggle important status
+  toggleImportant: async (postId, important) => {
+    return apiRequest(`/api/scraped-posts/${postId}/important?important=${important}`, {
+      method: 'PATCH',
+    });
+  },
 };
 
 // Scraping API

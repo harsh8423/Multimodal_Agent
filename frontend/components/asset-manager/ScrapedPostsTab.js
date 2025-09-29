@@ -128,6 +128,19 @@ export default function ScrapedPostsTab({ onUpdate }) {
     }
   };
 
+  const handleToggleImportant = async (postId, important) => {
+    try {
+      await scrapedPostsAPI.toggleImportant(postId, important);
+      // Update the post in the local state
+      setPosts(posts.map(post => 
+        post.id === postId ? { ...post, important } : post
+      ));
+    } catch (err) {
+      console.error('Failed to toggle important status:', err);
+      setError(err.message);
+    }
+  };
+
   const handleSelectAll = () => {
     if (selectedPosts.length === posts.length) {
       setSelectedPosts([]);
@@ -380,6 +393,7 @@ export default function ScrapedPostsTab({ onUpdate }) {
                         selected={selectedPosts.includes(post.id)}
                         onSelect={handlePostSelect}
                         onDelete={handleDelete}
+                        onToggleImportant={handleToggleImportant}
                       />
                     ))}
                   </div>

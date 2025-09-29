@@ -23,6 +23,7 @@ import ChatInput from '@/components/ChatInput';
 import GoogleSignIn from '@/components/GoogleSignIn';
 import { cn, formatTime } from '@/lib/utils';
 import ChatHistory from '@/components/ChatHistory';
+import AssetDragDrop from '@/components/AssetDragDrop';
 import { MultimodalAgentClient } from '@/lib/websocket-client';
 import { authService } from '@/lib/auth';
 import { uploadToCloudinary } from '@/lib/cloudinary';
@@ -45,6 +46,9 @@ const ChatInterface = ({ user: userProp }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [nanoStream, setNanoStream] = useState([]); // rolling tiny status lines
   const [nanoExpanded, setNanoExpanded] = useState(false);
+  const [showAssetManager, setShowAssetManager] = useState(false);
+  const [attachedAssets, setAttachedAssets] = useState([]);
+  const [browseAssetMode, setBrowseAssetMode] = useState(false);
   const router = useRouter();
 
   const clientRef = useRef(null);
@@ -220,6 +224,14 @@ const ChatInterface = ({ user: userProp }) => {
     };
   }, []);
 
+  const handleAssetDrop = (assetData) => {
+    setAttachedAssets(prev => [...prev, assetData]);
+  };
+
+  const handleRemoveAsset = (index) => {
+    setAttachedAssets(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSendMessage = async (text) => {
     const message = (typeof text === 'string' ? text : inputMessage).trim();
     if (!message || message.length === 0 || !isConnected || isSending) {
@@ -257,6 +269,21 @@ const ChatInterface = ({ user: userProp }) => {
       }
     }
 
+    // Prepare asset data for the message
+    let assetMetadata = null;
+    if (attachedAssets.length > 0) {
+      assetMetadata = {
+        assets: attachedAssets.map(asset => ({
+          type: asset.type,
+          id: asset.asset.id,
+          name: asset.type === 'brands' ? asset.asset.name : 
+                asset.type === 'competitors' ? `${asset.asset.username} - ${asset.asset.platform}` :
+                asset.asset.title || asset.asset.name,
+          data: asset.asset
+        }))
+      };
+    }
+
     const newMessage = {
       id: Date.now(),
       content: message,
@@ -264,25 +291,32 @@ const ChatInterface = ({ user: userProp }) => {
       timestamp: new Date().toISOString(),
       isStreaming: false,
       mediaUrl,
-      mediaType
+      mediaType,
+      attachedAssets: attachedAssets.length > 0 ? attachedAssets : null
     };
     setMessages(prev => [...prev, newMessage]);
     setIsTyping(true);
 
     try {
-      clientRef.current?.sendMessage(message, null, chatId, metadata);
+      // Combine metadata with asset data
+      const combinedMetadata = {
+        ...metadata,
+        ...assetMetadata
+      };
+      clientRef.current?.sendMessage(message, null, chatId, combinedMetadata);
     } catch (err) {
       setConnectionError(err?.message || 'Failed to send message');
       setIsTyping(false);
       setIsSending(false);
       return;
     }
-    // Clear selected media after sending
+    // Clear selected media and assets after sending
     if (selectedMedia) {
       setSelectedMedia(null);
       if (imageInputRef.current) imageInputRef.current.value = '';
       if (videoInputRef.current) videoInputRef.current.value = '';
     }
+    setAttachedAssets([]);
   };
 
   // handled inside ChatInput
@@ -379,15 +413,61 @@ const ChatInterface = ({ user: userProp }) => {
         "bg-white text-gray-900 flex flex-col transition-all duration-300 border-r border-gray-200",
         sidebarCollapsed ? "w-16" : "w-80"
       )}>
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-gray-200">
+        {/* Sidebar Header - User Section */}
+        <div className="p-3 border-b border-gray-200">
           <div className="flex items-center justify-between">
             {!sidebarCollapsed && (
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-gray-700" />
-                </div>
-                <h1 className="font-semibold text-gray-900">Multimodal Agent</h1>
+                {!authService.isAuthenticated() ? (
+                  <div className="w-full">
+                    <GoogleSignIn onSignIn={(ud, token) => {
+                      try {
+                        authService.saveToStorage(ud, token);
+                        try { clientRef.current?.disconnect(); } catch {}
+                        setTimeout(() => {
+                          window.location.reload();
+                        }, 100);
+                      } catch {}
+                    }} />
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">
+                        {user.name}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {user.email}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          // TODO: Add settings functionality
+                          console.log('Settings clicked');
+                        }}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Settings"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          authService.logout?.();
+                          try { clientRef.current?.disconnect(); } catch {}
+                          window.location.reload();
+                        }}
+                        className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                        title="Sign out"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
             <button
@@ -398,112 +478,67 @@ const ChatInterface = ({ user: userProp }) => {
             </button>
           </div>
           {!sidebarCollapsed && (
-            <div className="mt-4 flex items-center gap-2">
+            <div className="mt-3 space-y-3">
+              {/* New Chat Button */}
               <button
                 onClick={handleCreateChat}
-                className="flex-1 p-3 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg flex items-center gap-3 transition-colors"
+                className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-3 transition-colors"
               >
                 <Plus className="w-4 h-4" />
-                <span>New chat</span>
+                <span>New Chat</span>
               </button>
-              <button
-                onClick={() => setShowHistory(!showHistory)}
-                className="p-3 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg"
-                title="Toggle history"
-              >
-                <MessageSquare className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Navigation Menu */}
-        {!sidebarCollapsed && (
-          <div className="px-4 py-2 border-b border-gray-200">
-            <div className="space-y-1">
-              <button
-                onClick={() => router.push('/')}
-                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span>Chat</span>
-              </button>
+              
+              {/* Go To Assets Button */}
               <button
                 onClick={() => router.push('/asset-manager')}
-                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="w-full p-3 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg flex items-center gap-3 transition-colors"
               >
                 <BarChart3 className="w-4 h-4" />
-                <span>Manage Assets</span>
+                <span>Go To Assets</span>
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* Chat History */}
-        <div className="flex-1 overflow-y-auto">
-          {!sidebarCollapsed && (
-            <ChatHistory
-              token={authService.token}
-              selectedChatId={chatId}
-              onSelectChat={handleSelectChat}
-              onCreateChat={handleCreateChat}
-              onChatsChange={setChats}
-            />
-          )}
-        </div>
-
-        {/* User Profile */}
-        <div className="border-t border-gray-200 p-4">
-          {sidebarCollapsed ? (
-            <div className="flex justify-center">
-              <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white">
-                <User className="w-4 h-4" />
+              
+              {/* Browse Asset Toggle */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-sm font-medium text-gray-700">Browse Asset</span>
+                <button
+                  onClick={() => setBrowseAssetMode(!browseAssetMode)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    browseAssetMode ? 'bg-blue-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      browseAssetMode ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
               </div>
             </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              {!authService.isAuthenticated() ? (
-                <div className="w-full">
-                  <GoogleSignIn onSignIn={(ud, token) => {
-                    try {
-                      authService.saveToStorage(ud, token);
-                      // Reconnect WS with new token
-                      try { clientRef.current?.disconnect(); } catch {}
-                      setTimeout(() => {
-                        window.location.reload();
-                      }, 100);
-                    } catch {}
-                  }} />
-                </div>
-              ) : (
-                <>
-                  <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center text-white">
-                    <User className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">
-                      {user.name}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {user.email}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      authService.logout?.();
-                      try { clientRef.current?.disconnect(); } catch {}
-                      window.location.reload();
-                    }}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Sign out"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </>
-              )}
-            </div>
           )}
         </div>
+
+        {/* Content Area - Chat History or Asset Manager */}
+        <div className="flex-1 overflow-y-auto">
+          {!sidebarCollapsed && (
+            browseAssetMode ? (
+              <AssetDragDrop
+                isOpen={true}
+                onClose={() => setBrowseAssetMode(false)}
+                onAssetDrop={handleAssetDrop}
+                embedded={true}
+              />
+            ) : (
+              <ChatHistory
+                token={authService.token}
+                selectedChatId={chatId}
+                onSelectChat={handleSelectChat}
+                onCreateChat={handleCreateChat}
+                onChatsChange={setChats}
+              />
+            )
+          )}
+        </div>
+
       </div>
 
       {/* Main Chat Area */}
@@ -661,6 +696,9 @@ const ChatInterface = ({ user: userProp }) => {
                 };
                 reader.readAsDataURL(file);
               }}
+              onAssetDrop={handleAssetDrop}
+              attachedAssets={attachedAssets}
+              onRemoveAsset={handleRemoveAsset}
               placeholder="Message the agent..."
               disabled={!isConnected || isSending}
               isStreaming={isTyping || isSending}
@@ -691,7 +729,6 @@ const ChatInterface = ({ user: userProp }) => {
         />
       </div>
 
-      {/* Log UI removed */}
     </div>
   );
 };

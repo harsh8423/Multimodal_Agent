@@ -59,17 +59,13 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
             "research_agent": {
                 "short_description": "Can Perform grounded searches across YouTube, Perplexity, Gemini Google Search or Instagram; synthesizes findings into concise answers with citations.",
                 "capabilities": [
-                    "Fetch recent, relevant YouTube videos matching a query",
                     "Perform web-grounded search + synthesis via Perplexity Sonar Pro",
                     "Run Google-grounded searches via a Gemini wrapper",
-                    "Scrape/lookup Instagram results via Apify when social signals are required",
                     "Return concise synthesized answers plus sources/citations and structured search results"
                 ],
                 "tools": [
-                    "get_youtube_videos",
                     "search_with_perplexity_sonar",
                     "gemini_google_search",
-                    "search_instagram_with_apify"
                 ],
                 "default_prompt_template": (
                     "You are RESEARCH_AGENT. Use the available tools to locate and synthesize factual information; produce concise answers and include short citations. {place_holder}\n\n"
@@ -100,43 +96,65 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
             },
 
             "asset_agent": {
-                "short_description": "Generates, stores and records assets; interacts with Google Sheets, image generation, and the asset store to return structured asset metadata.",
+                "short_description": "Manages and retrieves user data including brands, competitors, scraped posts, and templates with flexible querying and multi-task operations.",
                 "capabilities": [
-                    "Generate or edit images (text->image or image-edit)",
-                    "Store binary assets and return canonical URLs / asset IDs",
-                    "Read, append and update Google Sheets for metadata and registry operations",
-                    "Validate input schemas for asset creation and return structured JSON metadata"
+                    "Retrieve and filter user brands with search functionality",
+                    "Get competitor data by platform, brand, or search terms",
+                    "Access scraped posts with advanced filtering (platform, date, engagement, text search)",
+                    "Manage templates with type and status filtering",
+                    "Perform multi-task operations combining multiple data types",
+                    "Get comprehensive analytics and statistics across all data types"
                 ],
                 "tools": [
-                    "google_sheet_reader",
-                    "google_sheet_append",
-                    "google_sheet_update"
+                    "get_user_brands",
+                    "get_brand_by_id",
+                    "get_brand_stats",
+                    "get_user_competitors",
+                    "get_competitor_by_id",
+                    "get_competitors_by_platform",
+                    "get_user_scraped_posts",
+                    "get_recent_posts_by_platform",
+                    "get_high_engagement_posts",
+                    "get_user_templates",
+                    "get_template_by_id",
+                    "get_templates_by_brand",
+                    "get_brand_complete_data",
+                    "search_across_all_data",
+                    "get_platform_analytics"
                 ],
                 "default_prompt_template": (
-                    "You are ASSET_AGENT. Produce or fetch assets and return structured metadata; use the available tools to store or index assets. {place_holder}\n\n"
+                    "You are ASSET_AGENT. You specialize in retrieving and managing user data including brands, competitors, scraped posts, and templates. {place_holder}\n\n"
                     "Tools available to you (detailed below):\n{TOOLS_SECTION}\n\n"
+                    "Decision rules:\n"
+                    " - For brand queries: use get_user_brands, get_brand_by_id, or get_brand_stats\n"
+                    " - For competitor queries: use get_user_competitors, get_competitor_by_id, or get_competitors_by_platform\n"
+                    " - For scraped posts: use get_user_scraped_posts, get_recent_posts_by_platform, or get_high_engagement_posts\n"
+                    " - For templates: use get_user_templates, get_template_by_id, or get_templates_by_brand\n"
+                    " - For multi-task operations: use get_brand_complete_data, search_across_all_data, or get_platform_analytics\n"
+                    " - Always include user_id in tool calls (extract from context or ask user)\n\n"
                     "Output RULE: Return a STRICT JSON object only (no extra text). The JSON must follow this schema exactly:\n"
                     "{\n"
                     '  \"text\": \"final response to be returned or empty if tool_requered is true\",\n'
-                    '  \"tool_required\": boolean,                                  // whether you will invoke an external tool (sheet write, image gen)\n'
+                    '  \"tool_required\": boolean,                                  // whether you will invoke an external tool\n'
                     '  \"tool_name\": \"string (if tool_required true; one of the registered tools)\",\n'
                     '  \"input_schema_fields\": [                                   // required inputs if tool_required true\n'
-                    '       {"field_name": "value", ...}'
+                    '       {"user_id": "string", "field_name": "value", ...}\n'
                     '  ],\n'
                     '  \"planner\": {\n'
                     '      \"plan_steps\": [\n'
-                    '          {\"id\":1, \"description\":\"string\", \"status\":\"pending|in_progress|completed\"}, // always mark first steps as in_progress\n'
+                    '          {\"id\":1, \"description\":\"string\", \"status\":\"pending|in_progress|completed\"},\n'
                     '          ...\n'
                     '      ],\n'
                     '      \"summary\": \"short plan summary\"\n'
                     '  },'
                     "}\n\n"
                     "Process rules:\n"
-                    "1) Begin by producing an initial plan (planner) of 1..N steps required to create/fetch/store the asset. For trivial asset requests a single-step plan is acceptable.\n"
-                    "2) If you set `tool_required` true, choose one primary tool in `tool_name` and enumerate exactly the `required_input_schema_fields` (name, type, example, required). Do NOT call multiple tools simultaneously in the initial output—prefer a single primary tool unless the user asked otherwise.\n"
-                    "3) After creating/fetching the asset, update `plan_steps` statuses .\n"
-                    "4) Output ONLY the JSON object described above, nothing else."
-                    "5) If you can do it in one step, do it in one step, just call the tool and return the result."
+                    "1) Start by building an initial plan (planner). Keep plans as small as possible for simple queries (single-step) and detailed for complex queries (multi-step).\n"
+                    "2) Try to implement the plan in the least number of steps possible. If you can do it in one step, do it in one step, just call the tool and return the result.\n"
+                    "3) If `tool_required` is true, set `tool_name` to the appropriate tool and populate `input_schema_fields` with exactly the inputs you need, including user_id.\n"
+                    "4) For multi-task operations, use tools like get_brand_complete_data or search_across_all_data to efficiently retrieve related data.\n"
+                    "5) After retrieving data, update the planner step statuses and provide comprehensive results.\n"
+                    "6) Output ONLY the JSON object described above, nothing else."
                 )
             },
 
@@ -182,7 +200,7 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                 "short_description": "Specialized agent for social media search and media downloading across multiple platforms using unified_search and get_media tools.",
                 "capabilities": [
                     "Search for posts and content across Instagram, YouTube, and Reddit using unified_search",
-                    "Download media content (videos, images) with metadata from supported platforms using get_media",
+                    "Download media content (videos, images) with metadata from supported social media platforms using get_media",
                     "Detect media URLs in user queries and automatically download them",
                     "Return structured search results and downloaded media with metadata"
                 ],
@@ -219,16 +237,7 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
             },
         },
         "tools": {
-            # Research tools (unchanged)
-            "get_youtube_videos": {
-                "tool_description": "YouTube Data API v3 wrapper to search for videos and return metadata (id, title, description, publishedAt, channel).",
-                "capabilities": ["search videos by query", "filter by publishedAfter", "return top-k results with metadata"],
-                "input_schema": {
-                    "query": {"type": "string", "required": True, "description": "Search query string"},
-                    "published_after": {"type": "string", "required": True, "description": "ISO8601 datetime, e.g., 2024-01-01T00:00:00Z"},
-                    "max_results": {"type": "integer", "required": False, "description": "Max results to return (default 5)"}
-                }
-            },
+            
             "search_with_perplexity_sonar": {
                 "tool_description": "Perplexity Sonar Pro integration for web search + answer synthesis with citations.",
                 "capabilities": ["web retrieval", "synthesized answers", "citations and search results metadata"],
@@ -246,45 +255,151 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "model": {"type": "string", "required": False, "description": "Model name (default 'gemini-2.5-pro')"}
                 }
             },
-            "search_instagram_with_apify": {
-                "tool_description": "Apify Instagram Search Scraper integration to fetch posts or user/hashtag matches.",
-                "capabilities": ["hashtag/user search", "scrape post metadata", "return JSON results"],
-                "input_schema": {
-                    "search_term": {"type": "string", "required": True, "description": "Hashtag or username"},
-                    "search_type": {"type": "string", "required": False, "description": "Type: 'hashtag' or 'user'"},
-                    "search_limit": {"type": "integer", "required": False, "description": "Number of results"}
-                }
-            },
 
-            # Asset tools (unchanged)
-            "google_sheet_reader": {
-                "tool_description": "Read rows from a Google Sheet and optionally filter by column values.",
-                "capabilities": ["read headers and rows", "filter rows by exact match"],
+            # User Data Tools
+            "get_user_brands": {
+                "tool_description": "Get all brands for a user with optional search filtering.",
+                "capabilities": ["retrieve user brands", "search by name or description", "apply limits"],
                 "input_schema": {
-                    "document_id": {"type": "string", "required": True, "description": "Spreadsheet ID"},
-                    "sheet_id": {"type": "string", "required": True, "description": "Sheet/tab name"},
-                    "filters": {"type": "object", "required": False, "description": "Dict of column->value to filter rows"}
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "search": {"type": "string", "required": False, "description": "Search term for brand name or description"},
+                    "limit": {"type": "integer", "required": False, "description": "Maximum number of brands to return (default: 50)"}
                 }
             },
-            "google_sheet_append": {
-                "tool_description": "Append a row to a Google Sheet, auto-creating columns if needed.",
-                "capabilities": ["append row", "auto-add new columns", "return append response"],
+            "get_brand_by_id": {
+                "tool_description": "Get a specific brand by ID with ownership validation.",
+                "capabilities": ["retrieve brand details", "validate ownership", "return brand metadata"],
                 "input_schema": {
-                    "spreadsheet_id": {"type": "string", "required": True, "description": "Spreadsheet ID"},
-                    "sheet_name": {"type": "string", "required": True, "description": "Sheet/tab name"},
-                    "row_data": {"type": "object", "required": True, "description": "Dict column->value for the new row"}
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "brand_id": {"type": "string", "required": True, "description": "Brand ID"}
                 }
             },
-            "google_sheet_update": {
-                "tool_description": "Update a cell by matching a column value and changing a target column.",
-                "capabilities": ["find row by column value", "update target cell", "return update response"],
+            "get_brand_stats": {
+                "tool_description": "Get comprehensive statistics for a brand including templates, competitors, and posts.",
+                "capabilities": ["brand analytics", "related data counts", "platform breakdown"],
                 "input_schema": {
-                    "spreadsheet_id": {"type": "string", "required": True},
-                    "sheet_name": {"type": "string", "required": True},
-                    "match_column": {"type": "string", "required": True},
-                    "match_value": {"type": "string", "required": True},
-                    "update_column": {"type": "string", "required": True},
-                    "new_value": {"type": "string", "required": True}
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "brand_id": {"type": "string", "required": True, "description": "Brand ID"}
+                }
+            },
+            "get_user_competitors": {
+                "tool_description": "Get competitors for a user with filtering options (brand, platform, search).",
+                "capabilities": ["retrieve competitors", "filter by brand/platform", "search by name/handle"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "brand_id": {"type": "string", "required": False, "description": "Optional brand ID filter"},
+                    "platform": {"type": "string", "required": False, "description": "Platform filter (instagram, youtube, reddit, linkedin)"},
+                    "search": {"type": "string", "required": False, "description": "Search term for competitor name or handle"},
+                    "limit": {"type": "integer", "required": False, "description": "Maximum number of competitors to return (default: 50)"}
+                }
+            },
+            "get_competitor_by_id": {
+                "tool_description": "Get a specific competitor by ID with ownership validation.",
+                "capabilities": ["retrieve competitor details", "validate ownership", "return competitor metadata"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "competitor_id": {"type": "string", "required": True, "description": "Competitor ID"}
+                }
+            },
+            "get_competitors_by_platform": {
+                "tool_description": "Get competitors filtered by platform with optional brand filter.",
+                "capabilities": ["platform-specific competitors", "brand filtering", "limit results"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "platform": {"type": "string", "required": True, "description": "Platform name (instagram, youtube, reddit, linkedin)"},
+                    "brand_id": {"type": "string", "required": False, "description": "Optional brand ID filter"},
+                    "limit": {"type": "integer", "required": False, "description": "Maximum number of competitors to return (default: 20)"}
+                }
+            },
+            "get_user_scraped_posts": {
+                "tool_description": "Get scraped posts for a user with comprehensive filtering (brand, platform, date, search, engagement).",
+                "capabilities": ["retrieve posts", "advanced filtering", "sorting options", "engagement analysis"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "brand_id": {"type": "string", "required": False, "description": "Optional brand ID filter"},
+                    "platform": {"type": "string", "required": False, "description": "Platform filter (instagram, youtube, reddit, linkedin)"},
+                    "days_back": {"type": "integer", "required": False, "description": "Number of days to look back"},
+                    "search": {"type": "string", "required": False, "description": "Search term for post text"},
+                    "limit": {"type": "integer", "required": False, "description": "Maximum number of posts to return (default: 50)"},
+                    "sort_by": {"type": "string", "required": False, "description": "Sort field (scraped_at, engagement, platform) (default: scraped_at)"},
+                    "sort_order": {"type": "string", "required": False, "description": "Sort order (asc, desc) (default: desc)"}
+                }
+            },
+            "get_recent_posts_by_platform": {
+                "tool_description": "Get recent posts from a specific platform with date filtering.",
+                "capabilities": ["platform-specific posts", "date filtering", "recent content"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "platform": {"type": "string", "required": True, "description": "Platform name (instagram, youtube, reddit, linkedin)"},
+                    "limit": {"type": "integer", "required": False, "description": "Maximum number of posts to return (default: 10)"},
+                    "days_back": {"type": "integer", "required": False, "description": "Number of days to look back (default: 7)"}
+                }
+            },
+            "get_high_engagement_posts": {
+                "tool_description": "Get posts with high engagement metrics (likes, comments).",
+                "capabilities": ["engagement filtering", "threshold-based search", "platform filtering"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "min_likes": {"type": "integer", "required": False, "description": "Minimum likes threshold (default: 100)"},
+                    "min_comments": {"type": "integer", "required": False, "description": "Minimum comments threshold (default: 10)"},
+                    "platform": {"type": "string", "required": False, "description": "Optional platform filter"},
+                    "limit": {"type": "integer", "required": False, "description": "Maximum number of posts to return (default: 20)"}
+                }
+            },
+            "get_user_templates": {
+                "tool_description": "Get templates for a user with filtering options (brand, type, status, search).",
+                "capabilities": ["retrieve templates", "filter by brand/type/status", "search by name"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "brand_id": {"type": "string", "required": False, "description": "Optional brand ID filter"},
+                    "template_type": {"type": "string", "required": False, "description": "Template type filter (video, image, text, mixed)"},
+                    "status": {"type": "string", "required": False, "description": "Status filter (active, archived, draft)"},
+                    "search": {"type": "string", "required": False, "description": "Search term for template name"},
+                    "limit": {"type": "integer", "required": False, "description": "Maximum number of templates to return (default: 50)"}
+                }
+            },
+            "get_template_by_id": {
+                "tool_description": "Get a specific template by ID with ownership validation.",
+                "capabilities": ["retrieve template details", "validate ownership", "return template metadata"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "template_id": {"type": "string", "required": True, "description": "Template ID"}
+                }
+            },
+            "get_templates_by_brand": {
+                "tool_description": "Get templates for a specific brand with optional type filtering.",
+                "capabilities": ["brand-specific templates", "type filtering", "limit results"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "brand_id": {"type": "string", "required": True, "description": "Brand ID"},
+                    "template_type": {"type": "string", "required": False, "description": "Optional template type filter"},
+                    "limit": {"type": "integer", "required": False, "description": "Maximum number of templates to return (default: 20)"}
+                }
+            },
+            "get_brand_complete_data": {
+                "tool_description": "Get complete data for a brand including templates, competitors, and recent posts.",
+                "capabilities": ["comprehensive brand data", "related data retrieval", "analytics summary"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "brand_id": {"type": "string", "required": True, "description": "Brand ID"}
+                }
+            },
+            "search_across_all_data": {
+                "tool_description": "Search across all user data types (brands, competitors, posts, templates).",
+                "capabilities": ["cross-data search", "unified results", "comprehensive search"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "search_term": {"type": "string", "required": True, "description": "Search term to look for"},
+                    "limit_per_type": {"type": "integer", "required": False, "description": "Maximum results per data type (default: 10)"}
+                }
+            },
+            "get_platform_analytics": {
+                "tool_description": "Get comprehensive analytics for a specific platform including engagement metrics and top posts.",
+                "capabilities": ["platform analytics", "engagement metrics", "top posts analysis"],
+                "input_schema": {
+                    "user_id": {"type": "string", "required": True, "description": "User ID"},
+                    "platform": {"type": "string", "required": True, "description": "Platform name (instagram, youtube, reddit, linkedin)"},
+                    "days_back": {"type": "integer", "required": False, "description": "Number of days to analyze (default: 30)"}
                 }
             },
 
@@ -355,10 +470,11 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
             "unified_search": {
                 "tool_description": "Unified search across multiple social media platforms (Instagram, YouTube, Reddit) with configurable parameters.",
                 "capabilities": [
-                    "Search Instagram posts using Apify API (hashtags, users, etc.)",
+                    "Search Instagram posts using Apify API (hashtags, username, etc.)",
                     "Search YouTube videos using official API with date filters",
                     "Search Reddit posts across all subreddits using PRAW",
-                    "Return structured results with metadata and platform-specific information"
+                    "Return structured results with metadata and platform-specific information",
+                    "Didn't have support for LinkedIn and Twitter"
                 ],
                 "input_schema": {
                     "platform": {
@@ -385,16 +501,6 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                         "type": "string",
                         "required": False,
                         "description": "Type of search for Instagram: 'hashtag' or 'user' (default: 'hashtag')"
-                    },
-                    "api_token": {
-                        "type": "string",
-                        "required": False,
-                        "description": "API token for Apify services (Instagram)"
-                    },
-                    "api_key": {
-                        "type": "string",
-                        "required": False,
-                        "description": "API key for YouTube"
                     }
                 }
             },
@@ -403,8 +509,8 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                 "capabilities": [
                     "Download videos and images from YouTube, Instagram, and LinkedIn",
                     "Extract metadata including captions, likes, comments, published dates",
-                    "Upload downloaded media to Cloudinary for cloud storage",
                     "Return structured results with file paths, metadata, and Cloudinary URLs"
+                    
                 ],
                 "input_schema": {
                     "url": {

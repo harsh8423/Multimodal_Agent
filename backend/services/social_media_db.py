@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional, Union
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from dotenv import load_dotenv
 
 from models.social_media import (
     Brand, Template, ScrapedPost, Competitor,
@@ -20,6 +21,9 @@ from models.social_media import (
     brand_helper, template_helper, scraped_post_helper, competitor_helper
 )
 from database import get_database
+
+# Load environment variables
+load_dotenv()
 
 
 class SocialMediaDBService:
