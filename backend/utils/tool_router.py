@@ -92,6 +92,7 @@ async def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> An
                                 if hasattr(tools_module, tool_name):
                                     tool_function = getattr(tools_module, tool_name)
                                 else:
+                                    # websocket_communication module removed; do not attempt to import
                                     raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
             except ImportError as e:
                 # Try importing from gemini_image module
@@ -114,6 +115,7 @@ async def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> An
                             if hasattr(tools_module, tool_name):
                                 tool_function = getattr(tools_module, tool_name)
                             else:
+                                # websocket_communication module removed; do not attempt to import
                                 raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
         
         # Get function signature to determine required parameters
@@ -297,5 +299,7 @@ def get_available_tools() -> list:
         available_tools.extend(get_media_tools)
     except ImportError:
         pass
+    
+    # websocket_communication tools removed
     
     return available_tools

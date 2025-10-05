@@ -32,16 +32,21 @@ async def orchestrator(
     debug: bool = False,
 ) -> Dict[str, Any]:
     user_text = ""
+    user_metadata = {}
+    user_image_path = None
+    
     if isinstance(message, dict):
         parts = []
         if "text" in message and message["text"]:
             parts.append(str(message["text"]).strip())
         if "image_path" in message and message["image_path"]:
             parts.append(f"[image_saved_at:{message['image_path']}]")
+            user_image_path = message["image_path"]
         if "metadata" in message and isinstance(message["metadata"], dict):
             md_sample = ", ".join(f"{k}={v}" for k, v in message["metadata"].items())
             if md_sample:
                 parts.append(f"[meta:{md_sample}]")
+            user_metadata = message["metadata"].copy()
         user_text = "\n".join(parts).strip()
 
     if not user_text:
@@ -141,11 +146,37 @@ async def orchestrator(
             if isinstance(message, dict) and "chat_id" in message and not message.get("text") and not message.get("image"):
                 is_control = True
             if not is_control:
+                # Create memory entry with metadata
+                memory_entry = f"User query: {user_text}"
+                memory_metadata = {
+                    "timestamp": message.get("timestamp"), 
+                    "has_image": bool(user_image_path),
+                    "image_path": user_image_path if user_image_path else None
+                }
+                
+                # Add user metadata to memory metadata
+                if user_metadata:
+                    memory_metadata["user_metadata"] = user_metadata
+                
                 await session_context.append_and_persist_memory(
                     "orchestrator",
-                    f"User query: {user_text}",
-                    {"timestamp": message.get("timestamp"), "has_image": "image_path" in message}
+                    memory_entry,
+                    memory_metadata
                 )
+                
+                # Also save metadata to orchestrator memory for future reference
+                if user_metadata:
+                    await session_context.append_and_persist_memory(
+                        "orchestrator",
+                        f"User metadata context: {json.dumps(user_metadata)}",
+                        {"context_type": "user_metadata", "timestamp": message.get("timestamp")}
+                    )
+                if user_image_path:
+                    await session_context.append_and_persist_memory(
+                        "orchestrator",
+                        f"User provided image: {user_image_path}",
+                        {"context_type": "user_asset", "timestamp": message.get("timestamp")}
+                    )
         except Exception:
             pass
 
@@ -252,7 +283,7 @@ async def orchestrator(
                     )
                     # log persistence removed
 
-            await websocket.send_json({"text": self_response})
+            await websocket.send_json({"text": self_response, "agent_name": "orchestrator"})
             print(f"[orchestrator-response] {self_response}")
 
             return {"agent_required": False, "self_response": self_response}
@@ -273,7 +304,7 @@ async def orchestrator(
             await session_context.send_nano("orchestrator", f"routing → {agent_name}")
         agent_query = orchestration.get("agent_query", "").strip()
 
-        if agent_name not in ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent"):  ##### To be made dynamic later 
+        if agent_name not in ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "content_creator"):  ##### To be made dynamic later 
             err_msg = f"Unknown agent requested: '{agent_name}'."
             if session_context:
                 await session_context.send_nano("orchestrator", err_msg)
@@ -303,7 +334,7 @@ async def orchestrator(
             "agent_query": agent_query
         })
 
-        result = await call_agent(agent_name, agent_query, model_name, registry_path, session_context)
+        result = await call_agent(agent_name, agent_query, model_name, registry_path, session_context, user_metadata, user_image_path)
 
         if session_context:
             await session_context.send_nano("orchestrator", f"{agent_name} finished the task")
@@ -333,6 +364,19 @@ async def orchestrator(
                 print(f"[agent-response:{agent_name}] {agent_text}")
         except Exception:
             pass
+
+        # Check if agent is awaiting user follow-up response
+        if isinstance(result, dict) and result.get("awaiting_user_followup"):
+            if session_context:
+                await session_context.send_nano("orchestrator", f"{agent_name} awaiting user response")
+                await session_context.append_and_persist_memory(
+                    "orchestrator",
+                    f"Agent {agent_name} is awaiting user follow-up response",
+                    {"phase": "awaiting_user", "agent_name": agent_name}
+                )
+            # Return early - don't process further until user responds
+            # Keep the same agent active for follow-up responses
+            return {"agent_required": True, "agent_name": agent_name, "self_response": "", "awaiting_user_followup": True}
 
         # await websocket.send_json({
         #     "text": result.get("text", "") if isinstance(result, dict) else str(result),

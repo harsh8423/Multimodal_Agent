@@ -1,5 +1,5 @@
 
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 from pathlib import Path
 from utils.build_prompts import build_system_prompt
 from utils.utility import _call_openai_chatmodel, _normalize_model_output, _call_gemini_chatmodel
@@ -9,9 +9,10 @@ from utils.mongo_store import save_chat_message
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 
-async def asset_agent(query: str, model_name: str = "gemini-2.5-flash",
+async def asset_agent(query: str, model_name: str = "gpt-5-mini",
                       registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
-                      max_iterations: int = 5, user_id: Optional[str] = None) -> Any:
+                      max_iterations: int = 5, user_id: Optional[str] = None, 
+                      user_metadata: Optional[Dict] = None, user_image_path: Optional[str] = None) -> Any:
     """
     Asset agent for managing and retrieving user data including brands, competitors, scraped posts, and templates.
     Uses flexible function-based tools to handle various data retrieval and multi-task operations.
@@ -67,11 +68,33 @@ async def asset_agent(query: str, model_name: str = "gemini-2.5-flash",
                     chat_history_context = "Recent conversation:\n" + "\n".join(chat_history_parts)
         
         # Add current query to memory using new chat-scoped system
+        memory_metadata = {"timestamp": None, "query_type": "asset"}
+        
+        # Add user metadata to memory metadata if provided
+        if user_metadata:
+            memory_metadata["user_metadata"] = user_metadata
+        if user_image_path:
+            memory_metadata["image_path"] = user_image_path
+        
         await session_context.append_and_persist_memory(
             "asset_agent",
             f"Asset query: {query}",
-            {"timestamp": None, "query_type": "asset"}
+            memory_metadata
         )
+        
+        # Also save metadata separately for future reference
+        if user_metadata:
+            await session_context.append_and_persist_memory(
+                "asset_agent",
+                f"User metadata context: {json.dumps(user_metadata)}",
+                {"context_type": "user_metadata", "timestamp": None}
+            )
+        if user_image_path:
+            await session_context.append_and_persist_memory(
+                "asset_agent",
+                f"User provided image: {user_image_path}",
+                {"context_type": "user_asset", "timestamp": None}
+            )
 
     system_prompt = build_system_prompt("asset_agent", str(registry_path),
                                         extra_instructions="{place_holder}")
@@ -80,7 +103,19 @@ async def asset_agent(query: str, model_name: str = "gemini-2.5-flash",
     if user_id:
         system_prompt += f"\n\nIMPORTANT: The current user_id is: {user_id}. Always use this exact user_id in all tool calls."
     
-    # Add memory context to system prompt if available
+    # Add metadata context to query if provided
+    enhanced_query = query
+    if user_metadata and isinstance(user_metadata, dict):
+        metadata_info = []
+        for key, value in user_metadata.items():
+            metadata_info.append(f"{key}: {value}")
+        if metadata_info:
+            enhanced_query = f"{query}\n\nAdditional metadata from user:\n" + "\n".join(metadata_info)
+    
+    if user_image_path:
+        enhanced_query += f"\n\nUser provided image saved at: {user_image_path}"
+    
+    # Add memory context to system prompt here: if available
     if asset_memory_context:
         system_prompt += f"\n\n{asset_memory_context}"
     
@@ -101,7 +136,7 @@ async def asset_agent(query: str, model_name: str = "gemini-2.5-flash",
             {"phase": "analysis", "query": query[:100], "agent_type": "asset"}
         )
 
-    raw = await _call_gemini_chatmodel(system_prompt, query, model_name)
+    raw = await _call_openai_chatmodel(system_prompt, enhanced_query, model_name)
     normalized = await _normalize_model_output(raw)
 
     # Log model response
@@ -281,7 +316,7 @@ async def asset_agent(query: str, model_name: str = "gemini-2.5-flash",
 
             print(f"=== ASSET_AGENT: Calling follow-up model with query: {follow_up_query[:200]}... ===")
             try:
-                next_raw = await _call_gemini_chatmodel(system_prompt, follow_up_query, model_name)
+                next_raw = await _call_openai_chatmodel(system_prompt, follow_up_query, model_name)
                 print(f"=== ASSET_AGENT: Raw model response: {next_raw} ===")
             except Exception as model_error:
                 print(f"=== ASSET_AGENT: MODEL CALL ERROR: {model_error} ===")

@@ -49,6 +49,8 @@ const ChatInterface = ({ user: userProp }) => {
   const [showAssetManager, setShowAssetManager] = useState(false);
   const [attachedAssets, setAttachedAssets] = useState([]);
   const [browseAssetMode, setBrowseAssetMode] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(320); // Default width in pixels
+  const [isResizing, setIsResizing] = useState(false);
   const router = useRouter();
 
   const clientRef = useRef(null);
@@ -57,12 +59,19 @@ const ChatInterface = ({ user: userProp }) => {
   const inputRef = useRef(null);
   const imageInputRef = useRef(null);
   const videoInputRef = useRef(null);
+  const sidebarRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
+    // Prevent multiple WebSocket connections
+    if (clientRef.current) {
+      console.log('WebSocket client already exists, skipping creation');
+      return;
+    }
+    
     const token = authService.token;
     const wsClient = new MultimodalAgentClient(typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws') : '');
     clientRef.current = wsClient;
@@ -155,6 +164,50 @@ const ChatInterface = ({ user: userProp }) => {
         setIsSending(false);
       });
 
+      // Handle agent follow-up questions
+      wsClient.on('agent_follow_up_question', (data) => {
+        console.log('Agent follow-up question received:', data);
+        const msg = {
+          id: Date.now() + Math.random(),
+          content: data.full_message || data.question,
+          role: 'assistant',
+          agent: data.agent_name || 'content_creator',
+          timestamp: new Date().toISOString(),
+          isStreaming: false,
+          mediaUrl: null,
+          mediaType: null,
+          isFollowUpQuestion: true,
+          followUpData: {
+            question: data.question,
+            context: data.context,
+            options: data.options
+          }
+        };
+        setMessages(prev => [...prev, msg]);
+        setIsTyping(false);
+        setIsSending(false);
+      });
+
+      // Handle agent notifications
+      wsClient.on('agent_notification', (data) => {
+        console.log('Agent notification received:', data);
+        const msg = {
+          id: Date.now() + Math.random(),
+          content: data.message,
+          role: 'assistant',
+          agent: data.agent_name || 'content_creator',
+          timestamp: new Date().toISOString(),
+          isStreaming: false,
+          mediaUrl: null,
+          mediaType: null,
+          isNotification: true,
+          notificationType: data.notification_type || 'info'
+        };
+        setMessages(prev => [...prev, msg]);
+        setIsTyping(false);
+        setIsSending(false);
+      });
+
       wsClient.on('chat_created', async (data) => {
         setChatId(data.chat_id);
         setChats(prev => [{ chat_id: data.chat_id, title: 'New Chat', last_active: new Date().toISOString(), message_count: 0 }, ...prev.filter(c => c.chat_id !== data.chat_id)]);
@@ -220,7 +273,12 @@ const ChatInterface = ({ user: userProp }) => {
     connect();
 
     return () => {
-      try { wsClient.disconnect(); } catch {}
+      try { 
+        if (clientRef.current) {
+          clientRef.current.disconnect(); 
+          clientRef.current = null;
+        }
+      } catch {}
     };
   }, []);
 
@@ -402,17 +460,53 @@ const ChatInterface = ({ user: userProp }) => {
     if (videoInputRef.current) videoInputRef.current.value = '';
   };
 
+  // Sidebar resize handlers
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = (e) => {
+    const newWidth = e.clientX;
+    const minWidth = 250;
+    const maxWidth = 600;
+    console.log('Resizing sidebar to:', newWidth); // Debug log
+    if (newWidth >= minWidth && newWidth <= maxWidth) {
+      setSidebarWidth(newWidth);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsResizing(false);
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  // Cleanup resize listeners on unmount
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
   // Logs removed
 
   const user = userProp || authService.user || { name: 'User', email: '' };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className={cn("flex h-screen bg-gray-50", isResizing && "select-none")}>
       {/* Left Sidebar */}
-      <div className={cn(
-        "bg-white text-gray-900 flex flex-col transition-all duration-300 border-r border-gray-200",
-        sidebarCollapsed ? "w-16" : "w-80"
-      )}>
+      <div 
+        ref={sidebarRef}
+        className={cn(
+          "bg-white text-gray-900 flex flex-col transition-all duration-300 border-r border-gray-200 relative",
+          sidebarCollapsed ? "w-16" : ""
+        )}
+        style={!sidebarCollapsed ? { width: `${sidebarWidth}px` } : {}}
+      >
         {/* Sidebar Header - User Section */}
         <div className="p-3 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -482,23 +576,23 @@ const ChatInterface = ({ user: userProp }) => {
               {/* New Chat Button */}
               <button
                 onClick={handleCreateChat}
-                className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-3 transition-colors"
+                className="w-full p-3 hover:bg-gray-100 text-gray-900 rounded-lg flex items-center gap-3 transition-colors"
               >
                 <Plus className="w-4 h-4" />
-                <span>New Chat</span>
+                <span className="text-sm font-medium">New Chat</span>
               </button>
               
               {/* Go To Assets Button */}
               <button
                 onClick={() => router.push('/asset-manager')}
-                className="w-full p-3 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg flex items-center gap-3 transition-colors"
+                className="w-full p-3 hover:bg-gray-100 text-gray-900 rounded-lg flex items-center gap-3 transition-colors"
               >
                 <BarChart3 className="w-4 h-4" />
-                <span>Go To Assets</span>
+                <span className="text-sm font-medium">Go To Assets</span>
               </button>
               
               {/* Browse Asset Toggle */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 hover:bg-gray-100 rounded-lg transition-colors">
                 <span className="text-sm font-medium text-gray-700">Browse Asset</span>
                 <button
                   onClick={() => setBrowseAssetMode(!browseAssetMode)}
@@ -538,6 +632,22 @@ const ChatInterface = ({ user: userProp }) => {
             )
           )}
         </div>
+
+        {/* Resize Handle */}
+        {!sidebarCollapsed && (
+          <div
+            className={cn(
+              "absolute top-0 right-0 w-1 h-full cursor-col-resize bg-transparent hover:bg-blue-400 transition-colors z-10 group",
+              isResizing && "bg-blue-500"
+            )}
+            onMouseDown={handleMouseDown}
+          >
+            {/* Visual indicator */}
+            <div className="absolute top-1/2 -translate-y-1/2 -right-1 w-3 h-8 bg-gray-300 hover:bg-blue-400 rounded-r-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <div className="w-0.5 h-4 bg-white rounded-full" />
+            </div>
+          </div>
+        )}
 
       </div>
 
@@ -609,6 +719,10 @@ const ChatInterface = ({ user: userProp }) => {
                 isStreaming={false}
                 mediaUrl={message.mediaUrl}
                 mediaType={message.mediaType}
+                isFollowUpQuestion={message.isFollowUpQuestion}
+                followUpData={message.followUpData}
+                isNotification={message.isNotification}
+                notificationType={message.notificationType}
               />
             ))}
 

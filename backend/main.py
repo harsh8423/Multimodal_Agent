@@ -23,6 +23,8 @@ from utils.session_memory import SESSION_MANAGER, create_session, remove_session
 from utils.mongo_store import (create_chat, save_chat_message, append_chat_log, update_chat_title, get_store)
 from utils.title_generator import generate_chat_title
 
+# Legacy websocket communication utilities removed; SessionContext stores websocket reference
+
 app = FastAPI()
 
 # Allow frontend dev server
@@ -162,8 +164,15 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             recv_count += 1
-            # Only print websocket-related messages (no full payload)
-            print(f"[ws-recv #{recv_count}] raw_length={len(data)} time={datetime.utcnow().isoformat()}")
+            # Log ALL received data to debug missing user responses
+            print(f"[ws-recv #{recv_count}] RAW DATA: {data}")
+            print(f"[ws-recv #{recv_count}] Length={len(data)} time={datetime.utcnow().isoformat()}")
+            
+            # Log current session if available
+            if session_context:
+                print(f"[ws-recv #{recv_count}] current_session: {session_context.session_id}")
+            else:
+                print(f"[ws-recv #{recv_count}] NO SESSION CONTEXT")
 
             # Ignore truly empty frames quickly
             if not data or data.strip() == "":
@@ -174,7 +183,15 @@ async def websocket_endpoint(websocket: WebSocket):
             # Expect JSON string
             try:
                 message = json.loads(data)
-            except json.JSONDecodeError:
+                print(f"[ws-recv] PARSED MESSAGE: {message}")
+                # Normalize message type for routing
+                msg_type = None
+                if isinstance(message, dict):
+                    msg_type = message.get("type") or message.get("event")
+                if msg_type == "user_response_to_agent":
+                    print(f"[ws-recv] 🎯 USER RESPONSE MESSAGE DETECTED!")
+            except json.JSONDecodeError as e:
+                print(f"[ws-recv] JSON decode error: {e}, data: {data}")
                 message = {"text": str(data)}
 
             # Ignore empty frames quickly
@@ -185,6 +202,9 @@ async def websocket_endpoint(websocket: WebSocket):
             if isinstance(message, dict) and message.get("type") == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
                 continue
+            print(f"[main.py] message: {message}")
+
+            # Note: Follow-up responses are handled as normal messages with optional agent signature
 
 
             # Handle authentication on first message
@@ -198,10 +218,13 @@ async def websocket_endpoint(websocket: WebSocket):
                             # Create session after successful authentication
                             session_context = await create_session(
                                 user_id=current_user.id,
-                                agent_names=["research_agent", "asset_agent", "orchestrator", "media_analyst", "social_media_search_agent"],
+                                agent_names=["research_agent", "asset_agent", "orchestrator", "media_analyst", "social_media_search_agent", "content_creator"],
                                 websocket=websocket,
                                 chat_id=current_chat_id
                             ) 
+                            
+                            # Associate websocket with session (held inside SessionContext)
+                            print(f"[main.py] WebSocket associated with session: {session_context.session_id}")
                             
                             # Hydrate memories if we have a chat_id
                             if current_chat_id:
@@ -316,6 +339,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     has_user_content = True
                 if message.get("image") or message.get("image_path"):
                     has_user_content = True
+                # Follow-up responses are now handled as normal messages
 
                 if not has_user_content:
                     # Skip processing silently; restrict prints to websocket/system/agent only
@@ -405,13 +429,57 @@ async def websocket_endpoint(websocket: WebSocket):
                 else:
                     print(f"[title-generation] Skipping title generation: is_first_message={is_first_message}, has_content={bool(user_message_content.strip())}")
         
-            # call orchestrator with session context
-            await orchestrator(message, websocket, session_context=session_context, model_name="gpt-5-mini", debug=False)
+            # Route based on optional agent signature; default to orchestrator
+            try:
+                target_signature = None
+                if isinstance(message, dict):
+                    target_signature = (message.get("signature") or "").strip()
+                
+                print(f"[main.py] Message signature: '{target_signature}'")
+                print(f"[main.py] Message content: {message.get('text', '')[:100]}...")
+
+                if target_signature in ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "content_creator"):
+                    from utils.router import call_agent
+                    user_text = message.get("text", "") if isinstance(message, dict) else str(message)
+                    result = await call_agent(
+                        target_signature,
+                        user_text,
+                        "gpt-4o-mini",
+                        str(REGISTRY_PATH),
+                        session_context,
+                        message.get("metadata") if isinstance(message, dict) else None,
+                        message.get("image_path") if isinstance(message, dict) else None,
+                    )
+                    
+                    # Check if agent is awaiting user follow-up response
+                    if isinstance(result, dict) and result.get("awaiting_user_followup"):
+                        print(f"[main.py] Agent {target_signature} is awaiting user follow-up response")
+                        # Don't send any response - agent is waiting for user input
+                        continue
+                    
+                    try:
+                        agent_text = result.get("text", "") if isinstance(result, dict) else str(result)
+                    except Exception:
+                        agent_text = str(result)
+                    
+                    # Only send response if there's actual content
+                    if agent_text and agent_text.strip():
+                        await websocket.send_json({
+                            "text": agent_text,
+                            "agent_name": target_signature
+                        })
+                else:
+                    # Default orchestrator flow
+                    await orchestrator(message, websocket, session_context=session_context, model_name="gpt-5-mini", debug=False)
+            except Exception as route_err:
+                await websocket.send_json({"text": f"Routing error: {route_err}"})
             continue
 
     except WebSocketDisconnect:
         # Clean up session on disconnect
         if session_context:
+            # No global registry to unregister
+            
             # Persist memories before cleanup
             if current_chat_id:
                 await session_context.persist_memories_to_db()
@@ -422,6 +490,8 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         # Handle unexpected errors
         if session_context:
+            # No global registry to unregister
+            
             # Persist memories before cleanup
             if current_chat_id:
                 await session_context.persist_memories_to_db()

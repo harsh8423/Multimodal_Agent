@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 from pathlib import Path
 import json
 
@@ -8,12 +8,14 @@ from agents.research_agent import research_agent
 from agents.asset_agent import asset_agent
 from agents.media_analyst import media_analyst
 from agents.social_media_search_agent import social_media_search_agent
+from agents.content_creator import content_creator
 from utils.session_memory import SessionContext
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 
-async def call_agent(agent_name: str, query: str, model_name: str = "gpt-5-mini",
-                     registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None) -> Any:
+async def call_agent(agent_name: str, query: str, model_name: str = "gpt-4o-mini",
+                     registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
+                     user_metadata: Optional[Dict] = None, user_image_path: Optional[str] = None) -> Any:
     """
     Dispatch helper that receives agent_name and query and calls the corresponding agent function.
 
@@ -46,11 +48,13 @@ async def call_agent(agent_name: str, query: str, model_name: str = "gpt-5-mini"
         user_id = getattr(session_context, 'user_id', None)
     
     # call the function (it should be an async function)
-    # Pass user_id for asset_agent specifically
+    # Pass user_id for asset_agent specifically and metadata for all agents
     if agent_name == "asset_agent":
-        result = await func(query, model_name=model_name, registry_path=str(registry_path), session_context=session_context, user_id=user_id)
+        result = await func(query, model_name=model_name, registry_path=str(registry_path), session_context=session_context, 
+                           user_id=user_id, user_metadata=user_metadata, user_image_path=user_image_path)
     else:
-        result = await func(query, model_name=model_name, registry_path=str(registry_path), session_context=session_context)
+        result = await func(query, model_name=model_name, registry_path=str(registry_path), session_context=session_context,
+                           user_metadata=user_metadata, user_image_path=user_image_path)
     return result
 
 

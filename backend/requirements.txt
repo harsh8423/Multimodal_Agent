@@ -18,3 +18,7 @@ google-auth
 google-auth-oauthlib 
 google-auth-httplib2 
 google-api-python-client
+
+
+requests>=2.31.0
+python-dateutil>=2.8.2

@@ -16,7 +16,7 @@ DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 
 async def social_media_search_agent(query: str, model_name: str = "gpt-4o",
                                    registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
-                                   max_iterations: int = 5) -> Any:
+                                   max_iterations: int = 5, user_metadata: Optional[Dict] = None, user_image_path: Optional[str] = None) -> Any:
     """
     Build social_media_search_agent system prompt from registry and call the chat model with the query.
     This agent specializes in social media search and media downloading using get_media and unified_search tools.
@@ -68,15 +68,49 @@ async def social_media_search_agent(query: str, model_name: str = "gpt-4o",
                     chat_history_context = "Recent conversation:\n" + "\n".join(chat_history_parts)
         
         # Add current query to memory using new chat-scoped system
+        memory_metadata = {"timestamp": None, "query_type": "social_media_search"}
+        
+        # Add user metadata to memory metadata if provided
+        if user_metadata:
+            memory_metadata["user_metadata"] = user_metadata
+        if user_image_path:
+            memory_metadata["image_path"] = user_image_path
+        
         await session_context.append_and_persist_memory(
             "social_media_search_agent",
             f"Social media search query: {query}",
-            {"timestamp": None, "query_type": "social_media_search"}
+            memory_metadata
         )
+        
+        # Also save metadata separately for future reference
+        if user_metadata:
+            await session_context.append_and_persist_memory(
+                "social_media_search_agent",
+                f"User metadata context: {json.dumps(user_metadata)}",
+                {"context_type": "user_metadata", "timestamp": None}
+            )
+        if user_image_path:
+            await session_context.append_and_persist_memory(
+                "social_media_search_agent",
+                f"User provided image: {user_image_path}",
+                {"context_type": "user_asset", "timestamp": None}
+            )
 
     # Build system prompt for this agent (may raise if registry missing)
     system_prompt = build_system_prompt("social_media_search_agent", str(registry_path),
                                         extra_instructions="{place_holder}")
+    
+    # Add metadata context to query if provided
+    enhanced_query = query
+    if user_metadata and isinstance(user_metadata, dict):
+        metadata_info = []
+        for key, value in user_metadata.items():
+            metadata_info.append(f"{key}: {value}")
+        if metadata_info:
+            enhanced_query = f"{query}\n\nAdditional metadata from user:\n" + "\n".join(metadata_info)
+    
+    if user_image_path:
+        enhanced_query += f"\n\nUser provided image saved at: {user_image_path}"
     
     # Add memory context to system prompt if available
     if social_media_memory_context:
@@ -100,7 +134,7 @@ async def social_media_search_agent(query: str, model_name: str = "gpt-4o",
             {"phase": "analysis", "query": query[:100]}
         )
     
-    raw = await _call_openai_chatmodel(system_prompt, query, model_name)
+    raw = await _call_openai_chatmodel(system_prompt, enhanced_query, model_name)
     normalized = await _normalize_model_output(raw)
 
     if session_context:

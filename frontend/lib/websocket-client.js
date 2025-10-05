@@ -20,6 +20,7 @@ export class MultimodalAgentClient {
         this.heartbeatInterval = null;
         this._tokenSent = false; // guard to avoid duplicate token sends
         this.nanoMessageHandlers = new Map(); // For handling nano messages
+        this._nextSignature = null; // optional agent signature for next outbound message
     }
 
     connect(token) {
@@ -61,9 +62,6 @@ export class MultimodalAgentClient {
 
                 this.ws.onmessage = (event) => {
                     try {
-                        // raw debug (length + repr)
-                        console.debug('[client-raw-frame]', 'len=', (event.data || '').length, 'repr=', event.data === '' ? "'' (empty)" : event.data);
-                
                         const data = JSON.parse(event.data);
                         this.handleMessage(data);
                     } catch (error) {
@@ -177,6 +175,15 @@ export class MultimodalAgentClient {
             case 'nano_message':
                 this.handleNanoMessage(data);
                 break;
+            case 'agent_direct_message':
+                this.handleAgentDirectMessage(data);
+                break;
+            case 'agent_follow_up_question':
+                this.handleAgentFollowUpQuestion(data);
+                break;
+            case 'agent_notification':
+                this.handleAgentNotification(data);
+                break;
             // 'log' event disabled; no persistence/UI for logs
             case 'message':
                 this.handleMessageEvent(data);
@@ -268,6 +275,26 @@ export class MultimodalAgentClient {
         this.emit('nano_message', data);
     }
 
+    handleAgentDirectMessage(data) {
+        console.log(`[${data.agent_name}] Direct message: ${data.message}`);
+        this.emit('agent_direct_message', data);
+    }
+
+    handleAgentFollowUpQuestion(data) {
+        console.log(`[${data.agent_name}] Follow-up question: ${data.question}`);
+        // Set signature so next user message is routed directly to this agent
+        if (data && typeof data.agent_name === 'string') {
+            this._nextSignature = data.agent_name;
+            console.log(`[WebSocket] Set _nextSignature to: ${this._nextSignature}`);
+        }
+        this.emit('agent_follow_up_question', data);
+    }
+
+    handleAgentNotification(data) {
+        console.log(`[${data.agent_name}] Notification (${data.notification_type}): ${data.message}`);
+        this.emit('agent_notification', data);
+    }
+
     // handleLog removed
 
     handleMessageEvent(data) {
@@ -283,26 +310,32 @@ export class MultimodalAgentClient {
         if (!this.isAuthenticated || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
             throw new Error('Not connected or authenticated');
         }
-
+        
         // Prevent sending empty messages
         if (!message || message.trim().length === 0) {
             console.warn('Attempted to send empty message, ignoring');
             return;
         }
-
+        
         const payload = { 
             text: message.trim(),
             chat_id: chatId || this.chatId // Include chat_id
         };
+        if (this._nextSignature) {
+            payload.signature = this._nextSignature;
+            console.log(`[WebSocket] Adding signature to payload: ${this._nextSignature}`);
+        }
         if (image) {
             payload.image = image;
         }
         if (metadata && typeof metadata === 'object') {
             payload.metadata = metadata;
         }
-
-        console.log('Sending message:', { text: message.trim(), hasImage: !!image, hasMetadata: !!metadata, chatId: payload.chat_id });
+        
+        console.log('Sending message:', { text: message.trim(), hasImage: !!image, hasMetadata: !!metadata, chatId: payload.chat_id, signature: payload.signature });
         this.ws.send(JSON.stringify(payload));
+        // Clear signature after sending one message
+        this._nextSignature = null;
     }
 
     // Chat management methods
@@ -397,6 +430,9 @@ export class MultimodalAgentClient {
             }
         }
     }
+
+    // Note: Follow-up responses are now sent as normal messages
+    // The sendMessage method handles all user responses including follow-ups
 
     // Utility methods
     isConnected() {
