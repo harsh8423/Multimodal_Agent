@@ -723,6 +723,7 @@ const ChatInterface = ({ user: userProp }) => {
                 followUpData={message.followUpData}
                 isNotification={message.isNotification}
                 notificationType={message.notificationType}
+                metadata={message.metadata}
               />
             ))}
 

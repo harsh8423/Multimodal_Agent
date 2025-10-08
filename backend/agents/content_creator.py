@@ -36,7 +36,7 @@ async def _maybe_await(value):
 
 async def content_creator(
     query: str,
-    model_name: str = "gpt-4o-mini",
+    model_name: str = "gpt-5-mini",
     registry_path: Optional[str] = None,
     session_context: Optional[SessionContext] = None,
     max_iterations: int = 8,
@@ -403,7 +403,7 @@ Do NOT return control to the orchestrator until you have fully completed the con
                     return error_response
 
                 # Validate agent name
-                valid_agents = ("asset_agent", "media_analyst", "social_media_search_agent", "research_agent")
+                valid_agents = ("asset_agent", "media_analyst", "social_media_search_agent", "research_agent", "media_activist")
                 if agent_name not in valid_agents:
                     error_response = {
                         "text": f"Unknown agent requested: '{agent_name}'. Valid agents: {', '.join(valid_agents)}",

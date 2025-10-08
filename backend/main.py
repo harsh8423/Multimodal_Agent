@@ -218,7 +218,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             # Create session after successful authentication
                             session_context = await create_session(
                                 user_id=current_user.id,
-                                agent_names=["research_agent", "asset_agent", "orchestrator", "media_analyst", "social_media_search_agent", "content_creator"],
+                                agent_names=["research_agent", "asset_agent", "orchestrator", "media_analyst", "social_media_search_agent", "content_creator", "media_activist"],
                                 websocket=websocket,
                                 chat_id=current_chat_id
                             ) 
@@ -438,7 +438,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 print(f"[main.py] Message signature: '{target_signature}'")
                 print(f"[main.py] Message content: {message.get('text', '')[:100]}...")
 
-                if target_signature in ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "content_creator"):
+                if target_signature in ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "content_creator", "media_activist"):
                     from utils.router import call_agent
                     user_text = message.get("text", "") if isinstance(message, dict) else str(message)
                     result = await call_agent(

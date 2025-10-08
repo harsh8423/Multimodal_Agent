@@ -236,13 +236,93 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                 )
             },
 
+            "media_activist": {
+                "short_description": "Specialized media generation agent for creating and enhancing images, audio, and voice clones with advanced AI capabilities.",
+                "capabilities": [
+                    "Generate high-quality images with editing capabilities and artistic details",
+                    "Create audio content using Gemini TTS with Microsoft TTS fallback",
+                    "Generate TTS voice clones using Minimax AI technology",
+                    "Compare generated images with reference images for quality and detailing control",
+                    "Provide improvement suggestions for media content",
+                ],
+                "tools": [
+                    "kie_image_generation",
+                    "gemini_audio",
+                    "minimax_audio_clone",
+                    "microsoft_tts",
+                    "analyze_image"
+                ],
+                "default_prompt_template": (
+                    "You are MEDIA_ACTIVIST, a specialized agent for media generation and enhancement. {place_holder}\n\n"
+                    "Tools available to you (detailed below):\n{TOOLS_SECTION}\n\n"
+                    "CORE RESPONSIBILITIES:\n"
+                    "1. Generate high-quality images using KIE image generation with enhanced prompts\n"
+                    "2. Create audio content using Gemini TTS (primary) and Microsoft TTS (fallback)\n"
+                    "3. Generate voice clones using Minimax AI technology\n"
+                    "4. Compare generated images with reference images for quality control\n"
+                    # "5. Provide improvement suggestions when images don't match requirements (75% similarity threshold)\n\n"
+                    "SIMPLE EXECUTION RULES:\n"
+                    " - For text-to-speech: Call gemini_audio with the exact text and voice parameters, then return the Cloudinary URL immediately\n"
+                    " - For image generation: Call kie_image_generation with enhanced prompt, return the generated image URL\n"
+                    " - For voice cloning: Call minimax_audio_clone with required parameters, return the result\n"
+                    " - DO NOT attempt post-processing, format conversion, or additional steps that are not part of the tool\n"
+                    " - DO NOT try to convert WAV to MP3, encode to base64, or compute durations - the tools handle this automatically\n"
+                    " - Simply call the appropriate tool and return the result URL\n\n"
+                    "CRITICAL TOOL LIMITATIONS (DO NOT HALLUCINATE):\n"
+                    " - kie_image_generation generates EXACTLY ONE image per call, NEVER multiple variations\n"
+                    " - kie_image_generation supports basic image_size options (1:1, 16:9, 4:3, etc.) but NOT multiple sizes in one call\n"
+                    " - kie_image_generation does NOT generate thumbnails, base64 content, or multiple formats\n"
+                    " - kie_image_generation does NOT support requesting multiple variations (A, B, C) in a single call\n"
+                    " - NEVER call kie_image_generation multiple times in one response - ALWAYS generate only ONE image\n"
+                    " - If user requests multiple variations, IGNORE that request and generate only ONE image with the best prompt\n"
+                    " - If user requests multiple sizes, choose the most appropriate size (default 1:1) and generate only ONE image\n"
+                    " - NEVER mention variations, multiple images, or multiple calls in your response\n"
+                    " - ALWAYS generate exactly ONE image and return its URL immediately\n"
+                    " - ALWAYS provide the style preferences in the prompt\n\n"
+                    "TOOL SELECTION PRIORITY:\n"
+                    " - For text-to-speech: ALWAYS use gemini_audio FIRST, only use microsoft_tts as fallback if gemini_audio fails\n"
+                    " - For voice cloning: Use minimax_audio_clone\n"
+                    " - For image generation: Use kie_image_generation\n\n"
+                    "PARAMETER REQUIREMENTS:\n"
+                    " - Only use parameters that are defined in the tool's input_schema\n"
+                    " - Keep parameter names exactly as specified in the tool schema\n"
+                    " - For gemini_audio: use 'text', 'voice_name', and optionally 'voice_style'\n"
+                    " - For kie_image_generation: use 'prompt', optionally 'reference_image_url', 'image_size'\n\n"
+                    "Output RULE: Return a STRICT JSON object only (no extra text). The JSON must follow this schema exactly:\n"
+                    "{\n"
+                    '  \"text\": \"final response to be returned or empty if tool_required is true\",\n'
+                    '  \"tool_required\": boolean,                                  // whether you need to call one of the tools\n'
+                    '  \"tool_name\": \"string (if tool_required true; one of the registered tools)\",\n'
+                    '  \"input_schema_fields\": [                                   // required inputs if tool_required true\n'
+                    '       {\"prompt\": \"enhanced prompt\", \"reference_image_url\": \"url\", \"voice_style\": \"cheerful\", \"text\": \"text to speak\"}\n'
+                    '  ],\n'
+                    '  \"planner\": {                                               // initial plan with steps and to-do style checkpoints\n'
+                    '       \"plan_steps\": [\n'
+                    '           {\"id\":1, \"description\":\"string\", \"status\":\"pending|in_progress|completed\"},\n'
+                    '           ...\n'
+                    '       ],\n'
+                    '       \"summary\": \"short plan summary which tool to call\"\n'
+                    '  },'
+                    "}\n\n"
+                    "Process rules:\n"
+                    "1) Start by building a simple plan (planner). For most tasks, this should be a single step.\n"
+                    "2) For text-to-speech: Call gemini_audio with the exact text and voice parameters, then return the result URL immediately.\n"
+                    "3) For image generation: Call kie_image_generation ONCE with enhanced prompt and return the single generated image URL. NEVER call it multiple times.\n"
+                    "4) If `tool_required` is true, set `tool_name` to the appropriate media generation tool and populate `input_schema_fields` with the required parameters only.\n"
+                    "5) After tool execution, if the tool returns a URL, set tool_required to false and return the URL in the text field.\n"
+                    "6) Handle tool failures gracefully with fallback options (e.g., Microsoft TTS if Gemini fails).\n"
+                    "7) NEVER generate multiple images or variations - always generate exactly ONE image per request.\n"
+                    "8) Output ONLY the JSON object described above, nothing else."
+                )
+            },
+
             "content_creator": {
                 "short_description": "Master content creation agent specializing in creating engaging social media content for Instagram, LinkedIn, and YouTube with comprehensive procedural workflows.",
                 "capabilities": [
                     "Create carousel posts, single image posts, video posts, shorts, reels for Instagram",
                     "Design LinkedIn posts including article-type content, industry insights, and professional updates",
                     "Create YouTube video content including shorts, educational videos, and entertainment content",
-                    "Orchestrate other agents (asset_agent, media_analyst, social_media_search_agent, research_agent) when needed",
+                    "Orchestrate other agents (asset_agent, media_analyst, social_media_search_agent, research_agent, media_activist) when needed",
                     "Use registered tools for content research, analysis, and asset management",
                     "Follow detailed procedural steps for each platform and content type",
                     "Generate content calendars, captions, hashtags, and posting strategies"
@@ -257,7 +337,8 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "- asset_agent: Manages user data including brands, competitors, scraped posts, and templates\n"
                     "- media_analyst: Analyzes images and videos using multimodal AI tools\n"
                     "- social_media_search_agent: Searches and downloads content from social media platforms\n"
-                    "- research_agent: Performs web searches and synthesis via Perplexity and Google Search\n\n"
+                    "- research_agent: Performs web searches and synthesis via Perplexity and Google Search\n"
+                    "- media_activist: Generates and enhances images, audio, and voice clones with advanced AI capabilities\n\n"
 
                     "CORE RESPONSIBILITIES:\n"
                     "1. Create comprehensive content for all supported platforms\n"
@@ -345,6 +426,7 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "- Call media_analyst when you need image/video analysis for content creation\n"
                     "- Call social_media_search_agent for trend research, competitor content, or media downloads\n"
                     "- Call research_agent for industry research, web trends, or topic analysis\n"
+                    "- Call media_activist when you need to generate images, audio, or voice clones for content creation\n"
                     "- Use tools directly when you have specific data needs within your capabilities\n"
                     "- Always extract user_id from session context for relevant tool calls\n\n"
 
@@ -675,6 +757,127 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                         "type": "object",
                         "required": False,
                         "description": "Optional custom configuration to override defaults"
+                    }
+                }
+            },
+
+            # Media Generation Tools
+            "kie_image_generation": {
+                "tool_description": "Generate or edit high-quality images using KIE API with advanced prompt enhancement and reference image comparison.",
+                "capabilities": [
+                    "Generate images from text prompts with artistic enhancement",
+                    "Compare or edit generated images with reference images",
+                    "Provide improvement suggestions based on similarity analysis",
+                    "Handle multiple image formats and sizes",
+                ],
+                "input_schema": {
+                    "prompt": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Enhanced text prompt for image generation (will be automatically enhanced with artistic details)"
+                    },
+                    "reference_image_url": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Optional reference image URL for comparison and improvement suggestions"
+                    },
+                    "model": {
+                        "type": "string",
+                        "required": False,
+                        "description": "KIE model to use (default: 'google/nano-banana-edit')"
+                    },
+                    "image_size": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Image size ratio (default: '1:1')"
+                    },
+                    "style_preferences": {
+                        "type": "object",
+                        "required": False,
+                        "description": "Style preferences including style, mood, and color_scheme"
+                    }
+                }
+            },
+            "gemini_audio": {
+                "tool_description": "Generate high-quality audio from text using Gemini TTS with voice enhancement and emotional context.",
+                "capabilities": [
+                    "Convert text to speech with natural voice synthesis",
+                    "Enhance text with emotional context and voice instructions",
+                    "Support multiple voice options (Kore, Aoede, Charon, Fenrir, Puck, etc.)",
+                    "Handle various audio formats and quality settings"
+                ],
+                "input_schema": {
+                    "text": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Text to convert to speech (will be enhanced with voice instructions if needed)"
+                    },
+                    "voice_name": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Voice to use (default: 'Kore', options: 'Kore', 'Aoede', 'Charon', 'Fenrir', 'Puck')"
+                    },
+                    "voice_style": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Voice style enhancement (e.g., 'cheerful', 'serious', 'energetic')"
+                    }
+                }
+            },
+            "minimax_audio_clone": {
+                "tool_description": "Generate voice clones using Minimax AI technology with advanced voice synthesis capabilities.",
+                "capabilities": [
+                    "Create voice clones from sample audio",
+                    "Generate speech in cloned voice with high fidelity",
+                    "Handle various audio formats and quality settings",
+                    "Provide detailed voice cloning metadata"
+                ],
+                "input_schema": {
+                    "text": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Text to generate in cloned voice"
+                    },
+                    "voice_sample_url": {
+                        "type": "string",
+                        "required": True,
+                        "description": "URL of voice sample for cloning"
+                    },
+                    "voice_id": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Optional voice ID for existing cloned voice"
+                    },
+                    "quality": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Audio quality setting (default: 'high')"
+                    }
+                }
+            },
+            "microsoft_tts": {
+                "tool_description": "Microsoft Text-to-Speech service as fallback for audio generation with neural voices support.",
+                "capabilities": [
+                    "High-quality neural voice synthesis",
+                    "Multiple language and voice options",
+                    "Fallback option when Gemini TTS is unavailable",
+                    "Support for SSML markup for advanced speech control"
+                ],
+                "input_schema": {
+                    "text": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Text to convert to speech"
+                    },
+                    "voice_name": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Voice name (default: 'en-US-JennyNeural')"
+                    },
+                    "style": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Voice style (e.g., 'cheerful', 'sad', 'angry')"
                     }
                 }
             },

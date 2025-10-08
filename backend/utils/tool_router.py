@@ -16,6 +16,10 @@ API_KEY_MAPPINGS = {
     "search_instagram_with_apify": "APIFY_API_TOKEN",
     "unified_search": "APIFY_API_TOKEN",  # For Instagram searches
     "get_media": None,  # No API key required
+    "kie_image_generation": "KIE_API_KEY",
+    "gemini_audio": "GEMINI_API_KEY",
+    "minimax_audio_clone": "MINIMAX_API_KEY",
+    "microsoft_tts": "AZURE_SPEECH_KEY",
 }
 
 def get_api_key(tool_name: str) -> Optional[str]:
@@ -92,8 +96,25 @@ async def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> An
                                 if hasattr(tools_module, tool_name):
                                     tool_function = getattr(tools_module, tool_name)
                                 else:
-                                    # websocket_communication module removed; do not attempt to import
-                                    raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+                                    # Try importing from media generation modules
+                                    media_modules = [
+                                        "tools.media_generation.kie_image_generation",
+                                        "tools.media_generation.gemini_audio", 
+                                        "tools.media_generation.minimax_audio_clone",
+                                        "tools.media_generation.microsoft_tts"
+                                    ]
+                                    
+                                    for module_name in media_modules:
+                                        try:
+                                            tools_module = importlib.import_module(module_name)
+                                            if hasattr(tools_module, tool_name):
+                                                tool_function = getattr(tools_module, tool_name)
+                                                break
+                                        except ImportError:
+                                            continue
+                                    else:
+                                        # websocket_communication module removed; do not attempt to import
+                                        raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
             except ImportError as e:
                 # Try importing from gemini_image module
                 tools_module = importlib.import_module("tools.gemini_image")
@@ -180,7 +201,18 @@ def tool_router_sync(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any
                     tool_function = getattr(tools_module, tool_name)
                 else:
                     # Try other modules
-                    for module_name in ["tools.gemini_image", "tools.gemini_video", "tools.unified_search", "tools.get_media"]:
+                    module_names = [
+                        "tools.gemini_image", 
+                        "tools.gemini_video", 
+                        "tools.unified_search", 
+                        "tools.get_media",
+                        "tools.media_generation.kie_image_generation",
+                        "tools.media_generation.gemini_audio", 
+                        "tools.media_generation.minimax_audio_clone",
+                        "tools.media_generation.microsoft_tts"
+                    ]
+                    
+                    for module_name in module_names:
                         try:
                             tools_module = importlib.import_module(module_name)
                             if hasattr(tools_module, tool_name):
@@ -299,6 +331,23 @@ def get_available_tools() -> list:
         available_tools.extend(get_media_tools)
     except ImportError:
         pass
+    
+    # Check media generation tools
+    media_generation_modules = [
+        "tools.media_generation.kie_image_generation",
+        "tools.media_generation.gemini_audio", 
+        "tools.media_generation.minimax_audio_clone",
+        "tools.media_generation.microsoft_tts"
+    ]
+    
+    for module_name in media_generation_modules:
+        try:
+            media_module = importlib.import_module(module_name)
+            media_tools = [name for name, obj in inspect.getmembers(media_module) 
+                          if inspect.isfunction(obj) and not name.startswith('_')]
+            available_tools.extend(media_tools)
+        except ImportError:
+            pass
     
     # websocket_communication tools removed
     

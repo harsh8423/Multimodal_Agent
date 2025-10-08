@@ -9,6 +9,7 @@ from agents.asset_agent import asset_agent
 from agents.media_analyst import media_analyst
 from agents.social_media_search_agent import social_media_search_agent
 from agents.content_creator import content_creator
+from agents.media_activist import media_activist
 from utils.session_memory import SessionContext
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"

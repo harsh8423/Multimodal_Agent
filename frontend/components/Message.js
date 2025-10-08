@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { cn, formatTime, copyToClipboard, getAgentColor, getInitials, getAvatarColor } from '@/lib/utils';
+import { processMessageMedia, getMediaDisplayConfig } from '@/lib/media-utils';
 
 const Message = ({ 
   message, 
@@ -30,7 +31,8 @@ const Message = ({
   followUpData = null,
   isNotification = false,
   notificationType = 'info',
-  onFollowUpResponse = null
+  onFollowUpResponse = null,
+  metadata = null
 }) => {
   const [copied, setCopied] = React.useState(false);
   const [followUpResponse, setFollowUpResponse] = React.useState('');
@@ -39,6 +41,10 @@ const Message = ({
   const isCloudinaryUrl = (url) => {
     return url && typeof url === 'string' && url.includes('cloudinary.com');
   };
+
+  // Process message media using the new utility
+  const mediaInfo = processMessageMedia(message, metadata);
+  const mediaItems = mediaInfo.mediaItems;
 
   // Replace bare URLs in text with markdown links labeled "Link" while preserving existing links and code blocks
   const linkifyMessage = (input) => {
@@ -269,7 +275,96 @@ const Message = ({
             </button>
 
             {/* Media Display */}
-            {mediaUrl && isCloudinaryUrl(mediaUrl) && (
+            {mediaItems.length > 0 && (
+              <div className="mb-4 space-y-3">
+                {mediaItems.map((mediaItem, index) => {
+                  const config = getMediaDisplayConfig(mediaItem.type);
+                  
+                  return (
+                    <div key={index} className="relative">
+                      {mediaItem.type === 'image' ? (
+                        <img
+                          src={mediaItem.url}
+                          alt={`Generated image ${index + 1}`}
+                          className={config.className}
+                          style={{ maxHeight: config.maxHeight }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      ) : mediaItem.type === 'video' ? (
+                        <video
+                          src={mediaItem.url}
+                          controls={config.showControls}
+                          className={config.className}
+                          style={{ maxHeight: config.maxHeight }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        >
+                          Your browser does not support the video tag.
+                        </video>
+                      ) : mediaItem.type === 'audio' ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.824L4.5 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.5l3.883-3.824z" clipRule="evenodd" />
+                                <path d="M14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.896-4.208-2.343-5.657a1 1 0 010-1.414z" />
+                                <path d="M11.843 5.757a1 1 0 011.414 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.743 4.243 1 1 0 01-1.414-1.414A3.983 3.983 0 0013 10a3.983 3.983 0 00-1.157-2.829 1 1 0 010-1.414z" />
+                              </svg>
+                            </div>
+                            <span className="text-sm font-medium text-gray-700">Generated Audio</span>
+                          </div>
+                          <audio
+                            src={mediaItem.url}
+                            controls={config.showControls}
+                            className={config.className}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          >
+                            Your browser does not support the audio tag.
+                          </audio>
+                        </div>
+                      ) : mediaItem.type === 'document' ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <span className="text-sm font-medium text-gray-700">Document</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={mediaItem.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                            >
+                              View Document
+                            </a>
+                            <span className="text-gray-400">•</span>
+                            <a
+                              href={mediaItem.url}
+                              download
+                              className="text-gray-600 hover:text-gray-800 text-sm"
+                            >
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Legacy Media Display (for backward compatibility) */}
+            {mediaUrl && isCloudinaryUrl(mediaUrl) && mediaItems.length === 0 && (
               <div className="mb-4">
                 {mediaType === 'image' ? (
                   <img

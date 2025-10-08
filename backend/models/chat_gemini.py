@@ -1,19 +1,16 @@
-import google.generativeai as genai
+# NEW SDK
+from google import genai
+from google.genai import types
 import json
 import os
 from typing import Dict, Any, Optional
 
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-
-
-# Configure Gemini API
-# Set your API key via environment variable GEMINI_API_KEY
-# or pass it directly: genai.configure(api_key="your-api-key-here")
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Create a global client (API key is automatically detected from environment)
+client = genai.Client()
 
 def orchestrator_function_gemini(system_prompt: str, user_query: str, model_name: str = "gemini-2.5-flash") -> Dict[str, Any]:
     """
@@ -29,23 +26,19 @@ def orchestrator_function_gemini(system_prompt: str, user_query: str, model_name
         Dict[str, Any]: Parsed JSON response from the AI
     """
     try:
-        # Initialize the Gemini model
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=system_prompt
-        )
-        
         # Configure generation parameters
-        generation_config = genai.types.GenerationConfig(
+        config = types.GenerateContentConfig(
+            system_instruction=system_prompt,
             temperature=0.3,  # Lower temperature for more consistent structured responses
             max_output_tokens=1000,
             response_mime_type="application/json"  # This helps ensure JSON response
         )
         
-        # Generate response
-        response = model.generate_content(
-            user_query,
-            generation_config=generation_config
+        # Generate response using the new SDK
+        response = client.models.generate_content(
+            model=model_name,
+            config=config,
+            contents=user_query
         )
         
         # Extract the response content

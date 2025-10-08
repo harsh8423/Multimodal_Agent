@@ -121,11 +121,28 @@ class MongoStore:
     # -------------------
     async def save_chat_message(self, chat_id: str, role: str, content: Any, 
                                agent: Optional[str] = None, message_type: str = "final_message", 
-                               meta: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
-        """Save a chat message (excludes nano_message per requirement)"""
+                               meta: Optional[Dict[str, Any]] = None, media_metadata: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """Save a chat message with enhanced metadata handling (excludes nano_message per requirement)"""
         # Do NOT store nano_message (per requirement)
         if message_type == "nano_message":
             return None
+        
+        # Enhanced metadata handling
+        enhanced_meta = meta or {}
+        
+        # Add media metadata if provided
+        if media_metadata:
+            enhanced_meta["media"] = media_metadata
+            
+        # Extract and store media URLs from content for easy frontend display
+        media_urls = self._extract_media_urls(content)
+        if media_urls:
+            enhanced_meta["media_urls"] = media_urls
+            
+        # Add content type detection
+        content_type = self._detect_content_type(content)
+        if content_type:
+            enhanced_meta["content_type"] = content_type
             
         doc = {
             "chat_id": chat_id,
@@ -134,7 +151,7 @@ class MongoStore:
             "agent": agent,
             "message_type": message_type,
             "content": content,
-            "meta": meta or {}
+            "meta": enhanced_meta
         }
         
         try:
@@ -206,6 +223,102 @@ class MongoStore:
         except Exception as e:
             logger.error(f"Failed to clear agent memories: {e}")
             return 0
+    
+    # -------------------
+    # Media URL and Content Type Detection
+    # -------------------
+    def _extract_media_urls(self, content: Any) -> List[Dict[str, str]]:
+        """Extract media URLs from content for frontend display"""
+        import re
+        import json
+        
+        media_urls = []
+        
+        # Handle string content
+        if isinstance(content, str):
+            # Look for Cloudinary URLs
+            cloudinary_pattern = r'https://res\.cloudinary\.com/[^/\s]+/[^/\s]+/[^/\s]+\.(jpg|jpeg|png|gif|webp|mp4|mov|avi|wav|mp3|ogg)'
+            cloudinary_matches = re.findall(cloudinary_pattern, content, re.IGNORECASE)
+            for match in cloudinary_matches:
+                media_urls.append({
+                    "url": match[0] if isinstance(match, tuple) else match,
+                    "type": "image" if match[1] in ['jpg', 'jpeg', 'png', 'gif', 'webp'] else "video" if match[1] in ['mp4', 'mov', 'avi'] else "audio"
+                })
+            
+            # Look for other CDN URLs
+            cdn_patterns = [
+                r'https://[^/\s]+\.(jpg|jpeg|png|gif|webp|mp4|mov|avi|wav|mp3|ogg)',
+                r'https://[^/\s]+\.cloudfront\.net/[^\s]+\.(jpg|jpeg|png|gif|webp|mp4|mov|avi|wav|mp3|ogg)',
+                r'https://[^/\s]+\.amazonaws\.com/[^\s]+\.(jpg|jpeg|png|gif|webp|mp4|mov|avi|wav|mp3|ogg)'
+            ]
+            
+            for pattern in cdn_patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                for match in matches:
+                    media_urls.append({
+                        "url": match[0] if isinstance(match, tuple) else match,
+                        "type": "image" if match[1] in ['jpg', 'jpeg', 'png', 'gif', 'webp'] else "video" if match[1] in ['mp4', 'mov', 'avi'] else "audio"
+                    })
+        
+        # Handle JSON content
+        elif isinstance(content, dict):
+            # Look for common media URL fields
+            media_fields = ['url', 'image_url', 'video_url', 'audio_url', 'generated_image_url', 'cloudinary_url']
+            for field in media_fields:
+                if field in content and isinstance(content[field], str):
+                    media_urls.append({
+                        "url": content[field],
+                        "type": self._detect_media_type_from_url(content[field])
+                    })
+        
+        return media_urls
+    
+    def _detect_media_type_from_url(self, url: str) -> str:
+        """Detect media type from URL"""
+        import re
+        
+        if re.search(r'\.(jpg|jpeg|png|gif|webp)$', url, re.IGNORECASE):
+            return "image"
+        elif re.search(r'\.(mp4|mov|avi|webm)$', url, re.IGNORECASE):
+            return "video"
+        elif re.search(r'\.(wav|mp3|ogg|m4a)$', url, re.IGNORECASE):
+            return "audio"
+        else:
+            return "unknown"
+    
+    def _detect_content_type(self, content: Any) -> str:
+        """Detect the type of content for better frontend handling"""
+        if isinstance(content, str):
+            # Check for JSON-like content
+            if content.strip().startswith('{') and content.strip().endswith('}'):
+                try:
+                    json.loads(content)
+                    return "json"
+                except:
+                    pass
+            
+            # Check for media URLs
+            if any(keyword in content.lower() for keyword in ['cloudinary', 'image', 'video', 'audio', 'generated']):
+                return "media_response"
+            
+            return "text"
+        
+        elif isinstance(content, dict):
+            # Check for media generation results
+            if any(key in content for key in ['generated_image_url', 'audio_url', 'video_url', 'cloudinary_url']):
+                return "media_generation"
+            
+            # Check for tool results
+            if 'success' in content or 'result' in content:
+                return "tool_result"
+            
+            return "structured_data"
+        
+        elif isinstance(content, list):
+            return "list"
+        
+        else:
+            return "unknown"
     
     # -------------------
     # Chat-scoped Logs
