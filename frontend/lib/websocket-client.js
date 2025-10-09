@@ -178,9 +178,6 @@ export class MultimodalAgentClient {
             case 'agent_direct_message':
                 this.handleAgentDirectMessage(data);
                 break;
-            case 'agent_follow_up_question':
-                this.handleAgentFollowUpQuestion(data);
-                break;
             case 'agent_notification':
                 this.handleAgentNotification(data);
                 break;
@@ -280,15 +277,6 @@ export class MultimodalAgentClient {
         this.emit('agent_direct_message', data);
     }
 
-    handleAgentFollowUpQuestion(data) {
-        console.log(`[${data.agent_name}] Follow-up question: ${data.question}`);
-        // Set signature so next user message is routed directly to this agent
-        if (data && typeof data.agent_name === 'string') {
-            this._nextSignature = data.agent_name;
-            console.log(`[WebSocket] Set _nextSignature to: ${this._nextSignature}`);
-        }
-        this.emit('agent_follow_up_question', data);
-    }
 
     handleAgentNotification(data) {
         console.log(`[${data.agent_name}] Notification (${data.notification_type}): ${data.message}`);

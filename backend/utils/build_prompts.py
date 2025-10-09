@@ -9,8 +9,8 @@ Usage:
     # create sample registry file (editable JSON)
     init_sample_registry("system_prompts.json")
 
-    # build prompt for orchestrator
-    prompt = build_system_prompt("orchestrator", "system_prompts.json")
+# build prompt for social media manager
+prompt = build_system_prompt("social_media_manager", "system_prompts.json")
     print(prompt)
 """
 
@@ -87,7 +87,7 @@ def build_system_prompt(agent_name: str, registry_path: str = DEFAULT_REGISTRY_F
     # If extra_instructions provided, inject; else leave {place_holder} token so you can post-process
     place_holder_value = extra_instructions if extra_instructions is not None else "{place_holder}"
 
-    # Build AGENTS_LIST (for orchestrator) and OTHER_AGENTS (for other agents)
+    # Build AGENTS_LIST (for social media manager) and OTHER_AGENTS (for other agents)
     agents_list_text = _format_agents_list(agents)
     other_agents_text = _format_agents_list(agents, skip_agent=agent_name)
 
@@ -111,11 +111,11 @@ def build_system_prompt(agent_name: str, registry_path: str = DEFAULT_REGISTRY_F
 
 # Example usage / CLI test
 if __name__ == "__main__":
-    # Build a prompt for the orchestrator
-    orchestrator_prompt = build_system_prompt("orchestrator", DEFAULT_REGISTRY_FILENAME,
+    # Build a prompt for the social media manager
+    social_media_manager_prompt = build_system_prompt("social_media_manager", DEFAULT_REGISTRY_FILENAME,
                                               extra_instructions="Decide whether to call a sub-agent. Provide agent_query containing any relevant metadata (e.g., [image:/uploads/...]).")
-    print("\n--- ORCHESTRATOR PROMPT ---\n")
-    print(orchestrator_prompt)
+    print("\n--- SOCIAL MEDIA MANAGER PROMPT ---\n")
+    print(social_media_manager_prompt)
 
     # Build a prompt for the research_agent
     research_prompt = build_system_prompt("research_agent", DEFAULT_REGISTRY_FILENAME,

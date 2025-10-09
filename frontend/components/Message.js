@@ -27,15 +27,11 @@ const Message = ({
   isStreaming = false,
   mediaUrl = null,
   mediaType = null,
-  isFollowUpQuestion = false,
-  followUpData = null,
   isNotification = false,
   notificationType = 'info',
-  onFollowUpResponse = null,
   metadata = null
 }) => {
   const [copied, setCopied] = React.useState(false);
-  const [followUpResponse, setFollowUpResponse] = React.useState('');
 
   // Check if URL is a Cloudinary URL
   const isCloudinaryUrl = (url) => {
@@ -82,7 +78,7 @@ const Message = ({
         return <Search className="w-5 h-5" />;
       case 'asset_agent':
         return <FileImage className="w-5 h-5" />;
-      case 'orchestrator':
+      case 'social_media_manager':
         return <Settings className="w-5 h-5" />;
       default:
         return <Sparkles className="w-5 h-5" />;
@@ -102,8 +98,8 @@ const Message = ({
         return 'Research Agent';
       case 'asset_agent':
         return 'Asset Agent';
-      case 'orchestrator':
-        return 'Orchestrator';
+      case 'social_media_manager':
+        return 'Social Media Manager';
       default:
         return 'AI Assistant';
     }
@@ -439,65 +435,6 @@ const Message = ({
             <div className=""></div>
           )}
 
-          {/* Follow-up question display (no input field - user responds via regular chat input) */}
-          {isFollowUpQuestion && followUpData && (
-            <div className="mt-4 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center shadow-sm">
-                  <span className="text-white text-sm font-semibold">?</span>
-                </div>
-                <span className="text-sm font-semibold text-blue-800">Follow-up Question</span>
-              </div>
-              
-              {/* Display the question and context */}
-              <div className="space-y-3">
-                {followUpData.context && (
-                  <div className="text-sm text-blue-800 bg-white/60 backdrop-blur-sm p-3 rounded-lg border border-blue-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
-                      <span className="font-medium text-blue-700">Context</span>
-                    </div>
-                    <p className="text-blue-800 leading-relaxed">{followUpData.context}</p>
-                  </div>
-                )}
-                
-                <div className="text-sm text-blue-900 bg-white/40 backdrop-blur-sm p-3 rounded-lg border border-blue-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full"></div>
-                    <span className="font-semibold text-blue-800">Question</span>
-                  </div>
-                  <p className="text-blue-900 leading-relaxed font-medium">{followUpData.question}</p>
-                </div>
-                
-                {/* Quick options for simple yes/no or approve/disapprove questions */}
-                {followUpData.options && followUpData.options.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-blue-200/60">
-                    <p className="text-sm font-medium text-blue-700 mb-3 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                      Quick options (type in chat):
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {followUpData.options.map((option, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1.5 bg-white/80 backdrop-blur-sm border border-blue-200 rounded-lg text-sm text-blue-700 font-medium hover:bg-white hover:shadow-sm transition-all duration-200 cursor-pointer"
-                        >
-                          {option}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              <div className="mt-4 pt-3 border-t border-blue-200/60">
-                <p className="text-xs text-blue-600 flex items-center gap-2">
-                  <span className="w-1 h-1 bg-blue-400 rounded-full"></span>
-                  💡 Respond to this question using the chat input below
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Notification styling */}
           {isNotification && (

@@ -70,51 +70,56 @@ async def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> An
         if hasattr(tools_module, tool_name):
             tool_function = getattr(tools_module, tool_name)
         else:
-            # Try importing from user_data_tools module
+            # Try importing from content_planner module
             try:
-                tools_module = importlib.import_module("tools.user_data_tools")
+                tools_module = importlib.import_module("tools.content_planner")
                 if hasattr(tools_module, tool_name):
                     tool_function = getattr(tools_module, tool_name)
                 else:
-                    # Try importing from gemini_image module
-                    tools_module = importlib.import_module("tools.gemini_image")
+                    # Try importing from user_data_tools module
+                    tools_module = importlib.import_module("tools.user_data_tools")
                     if hasattr(tools_module, tool_name):
                         tool_function = getattr(tools_module, tool_name)
                     else:
-                        # Try importing from gemini_video module
-                        tools_module = importlib.import_module("tools.gemini_video")
+                        # Try importing from gemini_image module
+                        tools_module = importlib.import_module("tools.gemini_image")
                         if hasattr(tools_module, tool_name):
                             tool_function = getattr(tools_module, tool_name)
                         else:
-                            # Try importing from unified_search module
-                            tools_module = importlib.import_module("tools.unified_search")
+                            # Try importing from gemini_video module
+                            tools_module = importlib.import_module("tools.gemini_video")
                             if hasattr(tools_module, tool_name):
                                 tool_function = getattr(tools_module, tool_name)
                             else:
-                                # Try importing from get_media module
-                                tools_module = importlib.import_module("tools.get_media")
+                                # Try importing from unified_search module
+                                tools_module = importlib.import_module("tools.unified_search")
                                 if hasattr(tools_module, tool_name):
                                     tool_function = getattr(tools_module, tool_name)
                                 else:
-                                    # Try importing from media generation modules
-                                    media_modules = [
-                                        "tools.media_generation.kie_image_generation",
-                                        "tools.media_generation.gemini_audio", 
-                                        "tools.media_generation.minimax_audio_clone",
-                                        "tools.media_generation.microsoft_tts"
-                                    ]
-                                    
-                                    for module_name in media_modules:
-                                        try:
-                                            tools_module = importlib.import_module(module_name)
-                                            if hasattr(tools_module, tool_name):
-                                                tool_function = getattr(tools_module, tool_name)
-                                                break
-                                        except ImportError:
-                                            continue
+                                    # Try importing from get_media module
+                                    tools_module = importlib.import_module("tools.get_media")
+                                    if hasattr(tools_module, tool_name):
+                                        tool_function = getattr(tools_module, tool_name)
                                     else:
-                                        # websocket_communication module removed; do not attempt to import
-                                        raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+                                        # Try importing from media generation modules
+                                        media_modules = [
+                                            "tools.media_generation.kie_image_generation",
+                                            "tools.media_generation.gemini_audio", 
+                                            "tools.media_generation.minimax_audio_clone",
+                                            "tools.media_generation.microsoft_tts"
+                                        ]
+                                        
+                                        for module_name in media_modules:
+                                            try:
+                                                tools_module = importlib.import_module(module_name)
+                                                if hasattr(tools_module, tool_name):
+                                                    tool_function = getattr(tools_module, tool_name)
+                                                    break
+                                            except ImportError:
+                                                continue
+                                        else:
+                                            # websocket_communication module removed; do not attempt to import
+                                            raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
             except ImportError as e:
                 # Try importing from gemini_image module
                 tools_module = importlib.import_module("tools.gemini_image")
@@ -206,6 +211,7 @@ def tool_router_sync(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any
                         "tools.gemini_video", 
                         "tools.unified_search", 
                         "tools.get_media",
+                        "tools.verification_tool",
                         "tools.media_generation.kie_image_generation",
                         "tools.media_generation.gemini_audio", 
                         "tools.media_generation.minimax_audio_clone",
@@ -329,6 +335,15 @@ def get_available_tools() -> list:
         get_media_tools = [name for name, obj in inspect.getmembers(get_media_module) 
                           if inspect.isfunction(obj) and not name.startswith('_')]
         available_tools.extend(get_media_tools)
+    except ImportError:
+        pass
+    
+    # Check verification tool
+    try:
+        verification_module = importlib.import_module("tools.verification_tool")
+        verification_tools = [name for name, obj in inspect.getmembers(verification_module) 
+                             if inspect.isfunction(obj) and not name.startswith('_')]
+        available_tools.extend(verification_tools)
     except ImportError:
         pass
     

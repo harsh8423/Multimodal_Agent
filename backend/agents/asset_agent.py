@@ -184,7 +184,7 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
                     )
                 if isinstance(agent_state, dict):
                     print(f"=== ASSET_AGENT: Returning agent_state dict: {agent_state} ===")
-                    print(f"=== ASSET_AGENT: FINAL RETURN TO ORCHESTRATOR: {agent_state} ===")
+                    print(f"=== ASSET_AGENT: FINAL RETURN TO SOCIAL MEDIA MANAGER: {agent_state} ===")
                     return agent_state
                 
                 print("=== ASSET_AGENT: direct response ===")

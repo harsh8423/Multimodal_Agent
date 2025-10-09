@@ -1,4 +1,6 @@
-import google.generativeai as genai
+# NEW SDK
+from google import genai
+from google.genai import types
 import json
 import os
 import requests
@@ -9,8 +11,8 @@ from dotenv import load_dotenv
 # Load environment variables (set GOOGLE_API_KEY or GEMINI_API_KEY in your .env)
 load_dotenv()
 
-# Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Create a global client (API key is automatically detected from environment)
+client = genai.Client()
 
 def analyze_video(
     system_prompt: str,
@@ -31,16 +33,11 @@ def analyze_video(
         Dict[str, Any]: Parsed JSON response from Gemini, or an error dict.
     """
     try:
-        # Initialize the Gemini model with the system instruction
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=system_prompt
-        )
-
-        # Generation configuration: low temperature for structured responses
-        generation_config = genai.types.GenerationConfig(
+        # Configure generation parameters
+        config = types.GenerateContentConfig(
+            system_instruction=system_prompt,
             temperature=0.2,
-            max_output_tokens=4000,  # Increased token limit
+            max_output_tokens=4000,
             response_mime_type="application/json"
         )
 
@@ -50,35 +47,26 @@ def analyze_video(
             response = requests.get(video_url)
             response.raise_for_status()
             
-            # Encode the video data as base64
-            video_data = base64.b64encode(response.content).decode('utf-8')
-            
             # Determine MIME type from content type or URL
             content_type = response.headers.get('content-type', 'video/mp4')
             if 'video/' not in content_type:
                 content_type = 'video/mp4'  # Default fallback
             
-            contents = [
-                {
-                    "role": "user",
-                    "parts": [
-                        {"text": user_query},
-                        {
-                            "inline_data": {
-                                "mime_type": content_type,
-                                "data": video_data
-                            }
-                        }
-                    ]
-                }
-            ]
+            # Use types.Part.from_bytes for proper video handling
+            video_part = types.Part.from_bytes(
+                data=response.content,
+                mime_type=content_type
+            )
+            
+            contents = [user_query, video_part]
         except Exception as e:
             return {"error": f"Failed to fetch video from {video_url}: {str(e)}"}
 
-        # Call the model
-        response = model.generate_content(
-            contents,
-            generation_config=generation_config
+        # Generate response using the new SDK
+        response = client.models.generate_content(
+            model=model_name,
+            config=config,
+            contents=contents
         )
 
         # Extract response text

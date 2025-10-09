@@ -73,7 +73,7 @@ export function getAgentColor(agent) {
       return 'text-purple-600 bg-purple-50 border-purple-200';
     case 'asset_agent':
       return 'text-green-600 bg-green-50 border-green-200';
-    case 'orchestrator':
+    case 'social_media_manager':
       return 'text-indigo-600 bg-indigo-50 border-indigo-200';
     default:
       return 'text-gray-600 bg-gray-50 border-gray-200';

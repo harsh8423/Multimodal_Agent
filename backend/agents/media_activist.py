@@ -8,7 +8,6 @@ This agent specializes in generating and enhancing media content including:
 - Image comparison and improvement suggestions
 - Fallback mechanisms for robust media generation
 
-The agent follows the same patterns as research_agent and content_creator for consistency.
 """
 
 import asyncio
@@ -435,6 +434,43 @@ async def media_activist(query: str, model_name: str = "gpt-5-mini",
         error_msg = f"Error parsing agent response as JSON: {e}"
         print(error_msg)
         
+        # Use verification tool to diagnose JSON parsing error
+        try:
+            from tools.verification_tool import diagnose_agent_error
+            diagnosis = await diagnose_agent_error(
+                agent_name="media_activist",
+                error_message=f"JSON parsing error: {str(e)}",
+                agent_query=query,
+                agent_output=str(normalized)
+            )
+            
+            if session_context:
+                await session_context.send_nano("media_activist", f"Verification tool diagnosis: {diagnosis.get('analysis', 'No analysis available')}")
+            
+            # Check if we can retry with prompt fix
+            solutions = diagnosis.get('solutions', [])
+            retry_solution = next((s for s in solutions if s.get('action') == 'retry_with_prompt_fix'), None)
+            
+            if retry_solution and retry_solution.get('patch'):
+                # Apply prompt fix and retry
+                try:
+                    fixed_system_prompt = system_prompt + "\n\n" + retry_solution['patch']
+                    raw = await _call_openai_chatmodel(fixed_system_prompt, enhanced_query, model_name)
+                    normalized = await _normalize_model_output(raw)
+                    
+                    # Try parsing again
+                    if isinstance(normalized, str):
+                        agent_response = json.loads(normalized)
+                        return agent_response
+                    return {"text": str(normalized)}
+                except Exception as retry_error:
+                    # Retry failed, continue with original error handling
+                    pass
+            
+        except Exception as verification_error:
+            # Verification tool failed, continue with original error handling
+            pass
+        
         if session_context:
             await session_context.send_nano("media_activist", "Error parsing agent response as JSON")
         
@@ -442,6 +478,23 @@ async def media_activist(query: str, model_name: str = "gpt-5-mini",
     except Exception as e:
         error_msg = f"Error in media_activist: {e}"
         print(error_msg)
+        
+        # Use verification tool to diagnose general error
+        try:
+            from tools.verification_tool import diagnose_agent_error
+            diagnosis = await diagnose_agent_error(
+                agent_name="media_activist",
+                error_message=str(e),
+                agent_query=query,
+                agent_output=None
+            )
+            
+            if session_context:
+                await session_context.send_nano("media_activist", f"Verification tool diagnosis: {diagnosis.get('analysis', 'No analysis available')}")
+            
+        except Exception as verification_error:
+            # Verification tool failed, continue with original error handling
+            pass
         
         if session_context:
             await session_context.send_nano("media_activist", "Error in media_activist")

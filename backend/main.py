@@ -10,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
 
-# Import orchestrator and registry functions
-from agents.orchestrator import orchestrator
+# Import social media manager and registry functions
+from agents.social_media_manager import social_media_manager
 from utils.agent_registry import init_updated_registry
 from database import connect_to_mongo, close_mongo_connection
 from routes.auth import router as auth_router
@@ -218,7 +218,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             # Create session after successful authentication
                             session_context = await create_session(
                                 user_id=current_user.id,
-                                agent_names=["research_agent", "asset_agent", "orchestrator", "media_analyst", "social_media_search_agent", "content_creator", "media_activist"],
+                                agent_names=["research_agent", "asset_agent", "social_media_manager", "media_analyst", "social_media_search_agent", "media_activist", "copy_writer"],
                                 websocket=websocket,
                                 chat_id=current_chat_id
                             ) 
@@ -371,7 +371,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 except Exception as e:
                     await session_context.add_log("error", f"Failed to save image: {e}", level="error")
 
-            # attach image path to the message dict so orchestrator can see it
+            # attach image path to the message dict so social media manager can see it
             if saved_path:
                 if isinstance(message, dict):
                     message["image_path"] = saved_path
@@ -429,7 +429,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 else:
                     print(f"[title-generation] Skipping title generation: is_first_message={is_first_message}, has_content={bool(user_message_content.strip())}")
         
-            # Route based on optional agent signature; default to orchestrator
+            # Route based on optional agent signature; default to social media manager
             try:
                 target_signature = None
                 if isinstance(message, dict):
@@ -438,7 +438,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 print(f"[main.py] Message signature: '{target_signature}'")
                 print(f"[main.py] Message content: {message.get('text', '')[:100]}...")
 
-                if target_signature in ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "content_creator", "media_activist"):
+                if target_signature in ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "media_activist", "copy_writer"):
                     from utils.router import call_agent
                     user_text = message.get("text", "") if isinstance(message, dict) else str(message)
                     result = await call_agent(
@@ -451,11 +451,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         message.get("image_path") if isinstance(message, dict) else None,
                     )
                     
-                    # Check if agent is awaiting user follow-up response
-                    if isinstance(result, dict) and result.get("awaiting_user_followup"):
-                        print(f"[main.py] Agent {target_signature} is awaiting user follow-up response")
-                        # Don't send any response - agent is waiting for user input
-                        continue
                     
                     try:
                         agent_text = result.get("text", "") if isinstance(result, dict) else str(result)
@@ -469,8 +464,8 @@ async def websocket_endpoint(websocket: WebSocket):
                             "agent_name": target_signature
                         })
                 else:
-                    # Default orchestrator flow
-                    await orchestrator(message, websocket, session_context=session_context, model_name="gpt-5-mini", debug=False)
+                    # Default social media manager flow
+                    await social_media_manager(message, websocket, session_context=session_context, model_name="gpt-5-mini", debug=False)
             except Exception as route_err:
                 await websocket.send_json({"text": f"Routing error: {route_err}"})
             continue

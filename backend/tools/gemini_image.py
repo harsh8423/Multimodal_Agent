@@ -1,4 +1,6 @@
-import google.generativeai as genai
+# NEW SDK
+from google import genai
+from google.genai import types
 import json
 import os
 import requests
@@ -9,8 +11,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Create a global client (API key is automatically detected from environment)
+client = genai.Client()
 
 def analyze_image(
     system_prompt: str,
@@ -31,21 +33,16 @@ def analyze_image(
         Dict[str, Any]: Parsed JSON response from the AI
     """
     try:
-        # Initialize Gemini model
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=system_prompt
-        )
-
-        # Configure generation settings
-        generation_config = genai.types.GenerationConfig(
+        # Configure generation parameters
+        config = types.GenerateContentConfig(
+            system_instruction=system_prompt,
             temperature=0.3,
-            max_output_tokens=4000,  # Increased token limit
+            max_output_tokens=4000,
             response_mime_type="application/json"
         )
 
         # Prepare contents: include text + images
-        parts = [{"text": user_query}]
+        contents = [user_query]
         
         # Add image URLs by fetching and encoding them
         for url in image_urls:
@@ -62,21 +59,20 @@ def analyze_image(
                 if 'image/' not in content_type:
                     content_type = 'image/jpeg'  # Default fallback
                 
-                parts.append({
-                    "inline_data": {
-                        "mime_type": content_type,
-                        "data": image_data
-                    }
-                })
+                # Use types.Part.from_bytes for proper image handling
+                image_part = types.Part.from_bytes(
+                    data=response.content,
+                    mime_type=content_type
+                )
+                contents.append(image_part)
             except Exception as e:
                 return {"error": f"Failed to fetch image from {url}: {str(e)}"}
-        
-        contents = [{"role": "user", "parts": parts}]
 
-        # Generate response
-        response = model.generate_content(
-            contents,
-            generation_config=generation_config
+        # Generate response using the new SDK
+        response = client.models.generate_content(
+            model=model_name,
+            config=config,
+            contents=contents
         )
 
         # Extract raw text response

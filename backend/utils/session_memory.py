@@ -155,7 +155,7 @@ class SessionContext:
         
         # Agent memories with larger capacity for in-memory storage
         self.agent_memories: Dict[str, AgentMemory] = {}
-        for agent_name in (agent_names or ["research_agent", "asset_agent", "orchestrator"]):
+        for agent_name in (agent_names or ["research_agent", "asset_agent", "social_media_manager", "copy_writer","media_activist", "social_media_search_agent"]):
             self.agent_memories[agent_name] = AgentMemory(agent_name, max_entries=200)
         
         # Real-time log queue (for streaming to client) - NOT persisted to MongoDB
@@ -352,22 +352,22 @@ class SessionContext:
                         )
                         self.agent_memories[agent]._entries.append(entry)
                 
-                # Optionally, add recent user messages to orchestrator memory for routing context
-                if "orchestrator" in self.agent_memories:
-                    for msg in all_msgs[-50:]:
-                        if msg.get("role") == "user":
-                            content = msg.get("content", "")
-                            ts = msg.get("timestamp")
-                            if hasattr(ts, 'timestamp'):
-                                timestamp = datetime.fromtimestamp(ts.timestamp(), tz=timezone.utc)
-                            else:
-                                timestamp = datetime.now(timezone.utc)
-                            entry = MemoryEntry(
-                                content=f"User said: {content}",
-                                timestamp=timestamp,
-                                metadata={"source": "chat_message", "role": "user"}
-                            )
-                            self.agent_memories["orchestrator"]._entries.append(entry)
+            # Optionally, add recent user messages to social media manager memory for routing context
+            if "social_media_manager" in self.agent_memories:
+                for msg in all_msgs[-50:]:
+                    if msg.get("role") == "user":
+                        content = msg.get("content", "")
+                        ts = msg.get("timestamp")
+                        if hasattr(ts, 'timestamp'):
+                            timestamp = datetime.fromtimestamp(ts.timestamp(), tz=timezone.utc)
+                        else:
+                            timestamp = datetime.now(timezone.utc)
+                        entry = MemoryEntry(
+                            content=f"User said: {content}",
+                            timestamp=timestamp,
+                            metadata={"source": "chat_message", "role": "user"}
+                        )
+                        self.agent_memories["social_media_manager"]._entries.append(entry)
             
             self.last_active = datetime.now(timezone.utc)
             logger.info(f"Hydrated memories for chat {chat_id}")

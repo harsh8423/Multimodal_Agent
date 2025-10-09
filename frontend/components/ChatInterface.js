@@ -148,7 +148,7 @@ const ChatInterface = ({ user: userProp }) => {
 
       wsClient.on('chat_message', (data) => {
         if (!data || typeof data.text !== 'string') return;
-        const agent = data.agent_required ? (data.agent_name || 'assistant') : 'orchestrator';
+        const agent = data.agent_required ? (data.agent_name || 'assistant') : 'social_media_manager';
         const msg = {
           id: Date.now() + Math.random(),
           content: data.text,
@@ -164,29 +164,6 @@ const ChatInterface = ({ user: userProp }) => {
         setIsSending(false);
       });
 
-      // Handle agent follow-up questions
-      wsClient.on('agent_follow_up_question', (data) => {
-        console.log('Agent follow-up question received:', data);
-        const msg = {
-          id: Date.now() + Math.random(),
-          content: data.full_message || data.question,
-          role: 'assistant',
-          agent: data.agent_name || 'content_creator',
-          timestamp: new Date().toISOString(),
-          isStreaming: false,
-          mediaUrl: null,
-          mediaType: null,
-          isFollowUpQuestion: true,
-          followUpData: {
-            question: data.question,
-            context: data.context,
-            options: data.options
-          }
-        };
-        setMessages(prev => [...prev, msg]);
-        setIsTyping(false);
-        setIsSending(false);
-      });
 
       // Handle agent notifications
       wsClient.on('agent_notification', (data) => {
@@ -195,7 +172,7 @@ const ChatInterface = ({ user: userProp }) => {
           id: Date.now() + Math.random(),
           content: data.message,
           role: 'assistant',
-          agent: data.agent_name || 'content_creator',
+          agent: data.agent_name || 'social_media_manager',
           timestamp: new Date().toISOString(),
           isStreaming: false,
           mediaUrl: null,
@@ -719,8 +696,6 @@ const ChatInterface = ({ user: userProp }) => {
                 isStreaming={false}
                 mediaUrl={message.mediaUrl}
                 mediaType={message.mediaType}
-                isFollowUpQuestion={message.isFollowUpQuestion}
-                followUpData={message.followUpData}
                 isNotification={message.isNotification}
                 notificationType={message.notificationType}
                 metadata={message.metadata}

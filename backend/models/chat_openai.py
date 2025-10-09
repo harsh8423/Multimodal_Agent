@@ -34,6 +34,7 @@ def orchestrator_function(system_prompt: str, user_query: str, model_name: str =
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_query}
             ],
+            response_format={"type": "json_object"},
         )
         
         # Extract the response content
