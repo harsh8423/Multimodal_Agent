@@ -187,12 +187,18 @@ async def media_analyst(query: str, model_name: str = "gpt-4o",
         # Log tool call
         if session_context:
             await session_context.send_nano("media_analyst", f"tool → {tool_name}")
-            # Save tool call decision to memory
-            await session_context.append_and_persist_memory(
-                "media_analyst",
-                f"Tool call decision: {tool_name} with parameters: {input_schema_fields}",
-                {"phase": "tool_call", "tool_name": tool_name, "parameters": input_schema_fields}
-            )
+        # ALWAYS override user_id with actual value from session context
+        user_id = getattr(session_context, 'user_id', None) if session_context else None
+        if user_id and isinstance(input_schema_fields, dict):
+            input_schema_fields["user_id"] = user_id
+            print(f"🔧 MEDIA_ANALYST: Overriding user_id with actual value: {user_id}")
+
+        # Save tool call decision to memory
+        await session_context.append_and_persist_memory(
+            "media_analyst",
+            f"Tool call decision: {tool_name} with parameters: {input_schema_fields}",
+            {"phase": "tool_call", "tool_name": tool_name, "parameters": input_schema_fields}
+        )
 
         # Call the tool using tool_router
         tool_result = await tool_router(tool_name, input_schema_fields)

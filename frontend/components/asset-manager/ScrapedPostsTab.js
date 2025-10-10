@@ -5,14 +5,13 @@ import { scrapedPostsAPI, brandsAPI, socialMediaUtils } from '@/lib/api/socialMe
 import ScrapedPostCard from './ScrapedPostCard';
 import AnalyticsView from './AnalyticsView';
 
-export default function ScrapedPostsTab({ onUpdate }) {
+export default function ScrapedPostsTab({ onUpdate, brandId }) {
   const [posts, setPosts] = useState([]);
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [view, setView] = useState('posts'); // 'posts' or 'analytics'
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -26,23 +25,10 @@ export default function ScrapedPostsTab({ onUpdate }) {
   const limit = 12;
 
   useEffect(() => {
-    loadBrands();
-  }, []);
-
-  useEffect(() => {
     if (view === 'posts') {
       loadPosts();
     }
-  }, [currentPage, searchTerm, selectedBrand, selectedPlatform, selectedStatus, dateFrom, dateTo, view]);
-
-  const loadBrands = async () => {
-    try {
-      const response = await brandsAPI.getAll({ limit: 100 });
-      setBrands(response.brands || []);
-    } catch (err) {
-      console.error('Failed to load brands:', err);
-    }
-  };
+  }, [currentPage, searchTerm, selectedPlatform, selectedStatus, dateFrom, dateTo, view, brandId]);
 
   const loadPosts = async () => {
     try {
@@ -53,7 +39,7 @@ export default function ScrapedPostsTab({ onUpdate }) {
         page: currentPage,
         limit,
         ...(searchTerm && { search: searchTerm }),
-        ...(selectedBrand && { brand_id: selectedBrand }),
+        ...(brandId && { brand_id: brandId }),
         ...(selectedPlatform && { platform: selectedPlatform }),
         ...(selectedStatus && { status: selectedStatus }),
         ...(dateFrom && { date_from: dateFrom }),
@@ -193,7 +179,7 @@ export default function ScrapedPostsTab({ onUpdate }) {
           {/* Filters and Search */}
           <div className="bg-white p-4 rounded-lg border border-gray-200">
             <form onSubmit={handleSearch} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 {/* Search */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
@@ -206,25 +192,6 @@ export default function ScrapedPostsTab({ onUpdate }) {
                   />
                 </div>
 
-                {/* Brand Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
-                  <select
-                    value={selectedBrand}
-                    onChange={(e) => {
-                      setSelectedBrand(e.target.value);
-                      handleFilterChange();
-                    }}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">All Brands</option>
-                    {brands.map((brand) => (
-                      <option key={brand.id} value={brand.id}>
-                        {brand.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
                 {/* Platform Filter */}
                 <div>

@@ -10,6 +10,7 @@ from agents.media_analyst import media_analyst
 from agents.social_media_search_agent import social_media_search_agent
 from agents.media_activist import media_activist
 from agents.copy_writer import copy_writer
+from agents.todo_planner import todo_planner
 from utils.session_memory import SessionContext
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"

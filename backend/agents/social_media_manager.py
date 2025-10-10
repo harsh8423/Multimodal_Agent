@@ -339,7 +339,7 @@ async def social_media_manager(
                 return error_response
 
             # Validate agent name
-            valid_agents = ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "media_activist", "copy_writer")
+            valid_agents = ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "media_activist", "copy_writer", "todo_planner")
             if agent_name not in valid_agents:
                 error_response = {
                     "agent_required": False,
@@ -455,6 +455,17 @@ async def social_media_manager(
                 last_text = agent_text or last_text
                 if agent_text:
                     print(f"[agent-response:{agent_name}] {agent_text}")
+                
+                # Check if the agent returned todo data and forward it to frontend
+                if isinstance(result, dict) and result.get("metadata", {}).get("message_type") == "todo_created":
+                    todo_data = result.get("metadata", {}).get("todo_data")
+                    if todo_data:
+                        await websocket.send_json({
+                            "text": agent_text,
+                            "agent_name": agent_name,
+                            "metadata": result.get("metadata")
+                        })
+                        print(f"[agent-response:{agent_name}] Forwarded todo data to frontend")
             except Exception:
                 pass
 
@@ -499,10 +510,30 @@ async def social_media_manager(
                         merged.update(item)
                 input_schema_fields = merged
 
-            # For tools, add user_id if not present
+            # For tools, ALWAYS override user_id with actual value from session context
             user_id = getattr(session_context, 'user_id', None) if session_context else None
-            if user_id and isinstance(input_schema_fields, dict) and "user_id" not in input_schema_fields:
+            if user_id and isinstance(input_schema_fields, dict):
                 input_schema_fields["user_id"] = user_id
+                print(f"🔧 Overriding user_id with actual value: {user_id}")
+            
+            # For todo tools, ALWAYS override chat_id with actual value from session context
+            if tool_name in ["manage_todos", "create_todo_list", "update_todo_task_status", "get_next_todo_task", "add_todo_task", "get_chat_todos"]:
+                chat_id = getattr(session_context, 'chat_id', None) if session_context else None
+                
+                if chat_id and isinstance(input_schema_fields, dict):
+                    input_schema_fields["chat_id"] = chat_id
+                    print(f"🔧 Overriding chat_id with actual value: {chat_id}")
+                elif not chat_id:
+                    print(f"⚠️ WARNING: No chat_id available in session_context for tool {tool_name}")
+                    # Use a fallback chat_id to prevent errors
+                    if isinstance(input_schema_fields, dict):
+                        fallback_chat_id = f"fallback_{session_context.session_id if session_context else 'unknown'}"
+                        input_schema_fields["chat_id"] = fallback_chat_id
+                        print(f"🔧 Using fallback chat_id: {fallback_chat_id}")
+                
+                # Add agent name for todo tools
+                if isinstance(input_schema_fields, dict) and "agent_name" not in input_schema_fields:
+                    input_schema_fields["agent_name"] = "social_media_manager"
 
             # Log tool call
             if session_context:
@@ -611,6 +642,19 @@ async def social_media_manager(
                         content=str(tool_result),
                         agent="social_media_manager"
                     )
+            
+            # Send WebSocket message with todo data if it's a todo creation
+            if tool_name == "manage_todos" and isinstance(tool_result, dict) and tool_result.get("success"):
+                todo_data = tool_result.get("todo_data")
+                if todo_data:
+                    await websocket.send_json({
+                        "text": f"Created todo list: {todo_data.get('title', 'Untitled')}",
+                        "agent_name": "social_media_manager",
+                        "metadata": {
+                            "todo_data": todo_data,
+                            "message_type": "todo_created"
+                        }
+                    })
 
             # Prepare follow-up query for next iteration
             follow_up_query = f"""

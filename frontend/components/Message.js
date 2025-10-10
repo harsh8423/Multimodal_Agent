@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn, formatTime, copyToClipboard, getAgentColor, getInitials, getAvatarColor } from '@/lib/utils';
 import { processMessageMedia, getMediaDisplayConfig } from '@/lib/media-utils';
+import TodoDisplay from './TodoDisplay';
 
 const Message = ({ 
   message, 
@@ -382,52 +383,68 @@ const Message = ({
               </div>
             )}
 
-            {/* Message Content */}
-           <div
-            className={cn(
-              // Base prose container (common)
-              "prose prose-base max-w-none",
-
-              // Theme: user vs non-user (agent)
-              isUser
-                ? // USER: inverted / dark text inside bubble
-                   "prose-invert prose-p:text-gray-100 prose-headings:text-gray-100"
-                : // AGENT: clean light-theme look with black text, no blur
-                   "text-black prose-p:text-black prose-headings:text-gray-900 prose-a:text-gray-800 hover:prose-a:underline [--tw-prose-body:#111827] [--tw-prose-headings:#111827] [--tw-prose-links:#111827]",
-
-              // Code & pre styles (respect theme)
-              isUser
-                ? "prose-code:bg-gray-700 prose-code:text-white prose-pre:bg-gray-900"
-                : "prose-code:bg-gray-100 prose-code:text-black prose-pre:bg-white",
-
-              // Shared readable text settings
-              "prose-p:leading-relaxed prose-p:text-base",
-              "prose-strong:text-gray-900 prose-strong:font-semibold",
-              "prose-code:px-2 prose-code:py-1 prose-code:rounded prose-code:text-sm prose-code:font-medium",
-              "prose-code:before:content-none prose-code:after:content-none",
-
-              // List & table niceties
-              "prose-ul:list-none prose-ul:pl-0 prose-li:pl-0 prose-li:relative prose-li:ml-6 prose-li:mb-2",
-              "prose-ol:pl-0 prose-li:marker:text-indigo-500 prose-li:marker:font-semibold",
-              "prose-table:border-collapse prose-th:bg-gray-50 prose-th:font-semibold prose-th:text-gray-900 prose-td:border-gray-200",
-
-              // Ensure no blur/filter is applied here for agent (explicitly clear)
-              // If any parent applied blur via `backdrop-filter`, these utilities help neutralize it.
-              !isUser && "backdrop-blur-0 filter-none",
-
-              // spacing resets
-              "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+            {/* Todo Display */}
+            {metadata?.todo_data && (
+              <div className="mb-4">
+                <TodoDisplay 
+                  todoData={metadata.todo_data}
+                  onTodoUpdate={() => {
+                    // Handle todo updates if needed
+                    console.log('Todo updated');
+                  }}
+                />
+              </div>
             )}
-          >
 
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={markdownComponents}
+            {/* Message Content */}
+            {/* Hide message content if it's raw JSON and we have todo data to display */}
+            {!(metadata?.todo_data && typeof message === 'string' && message.includes('"success": true') && message.includes('"todo_data"')) && (
+              <div
+                className={cn(
+                  // Base prose container (common)
+                  "prose prose-base max-w-none",
+
+                  // Theme: user vs non-user (agent)
+                  isUser
+                    ? // USER: inverted / dark text inside bubble
+                       "prose-invert prose-p:text-gray-100 prose-headings:text-gray-100"
+                    : // AGENT: clean light-theme look with black text, no blur
+                       "text-black prose-p:text-black prose-headings:text-gray-900 prose-a:text-gray-800 hover:prose-a:underline [--tw-prose-body:#111827] [--tw-prose-headings:#111827] [--tw-prose-links:#111827]",
+
+                  // Code & pre styles (respect theme)
+                  isUser
+                    ? "prose-code:bg-gray-700 prose-code:text-white prose-pre:bg-gray-900"
+                    : "prose-code:bg-gray-100 prose-code:text-black prose-pre:bg-white",
+
+                  // Shared readable text settings
+                  "prose-p:leading-relaxed prose-p:text-base",
+                  "prose-strong:text-gray-900 prose-strong:font-semibold",
+                  "prose-code:px-2 prose-code:py-1 prose-code:rounded prose-code:text-sm prose-code:font-medium",
+                  "prose-code:before:content-none prose-code:after:content-none",
+
+                  // List & table niceties
+                  "prose-ul:list-none prose-ul:pl-0 prose-li:pl-0 prose-li:relative prose-li:ml-6 prose-li:mb-2",
+                  "prose-ol:pl-0 prose-li:marker:text-indigo-500 prose-li:marker:font-semibold",
+                  "prose-table:border-collapse prose-th:bg-gray-50 prose-th:font-semibold prose-th:text-gray-900 prose-td:border-gray-200",
+
+                  // Ensure no blur/filter is applied here for agent (explicitly clear)
+                  // If any parent applied blur via `backdrop-filter`, these utilities help neutralize it.
+                  !isUser && "backdrop-blur-0 filter-none",
+
+                  // spacing resets
+                  "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                )}
               >
-                {renderedMessage}
-              </ReactMarkdown>
-            </div>
+
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                  components={markdownComponents}
+                >
+                  {renderedMessage}
+                </ReactMarkdown>
+              </div>
+            )}
           </div>
           
           {/* Message glow effect for AI responses */}

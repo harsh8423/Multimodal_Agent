@@ -17,10 +17,7 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
     Asset agent for managing and retrieving user data including brands, competitors, scraped posts, and templates.
     Uses flexible function-based tools to handle various data retrieval and multi-task operations.
     """
-    # Log asset agent start
-    if session_context:
-        await session_context.add_log("asset_agent_started", f"Asset agent processing query: {query[:100]}...")
-
+    
     # Extract user_id from session context if not provided
     if not user_id and session_context:
         user_id = getattr(session_context, 'user_id', None)
@@ -128,7 +125,6 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
 
     # Log model call
     if session_context:
-        await session_context.add_log("model_call", "Asset agent calling model")
         # Save model call decision to memory
         await session_context.append_and_persist_memory(
             "asset_agent",
@@ -141,7 +137,6 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
 
     # Log model response
     if session_context:
-        await session_context.add_log("model_response", "Asset agent received model response")
         # Save model response to memory
         await session_context.append_and_persist_memory(
             "asset_agent",
@@ -171,7 +166,6 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
             if not needs_tool:
                 print(f"=== ASSET_AGENT: No tool required, returning response ===")
                 if session_context:
-                    await session_context.add_log("no_tool_required", "Asset agent determined no tool needed")
                     await session_context.append_and_persist_memory(
                         "asset_agent",
                         f"No tool required decision: Direct asset response",
@@ -218,9 +212,10 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
                     {"phase": "tool_call", "tool_name": tool_name, "parameters": input_schema_fields}
                 )
 
-            # Add user_id to input_schema_fields if not present
-            if user_id and isinstance(input_schema_fields, dict) and "user_id" not in input_schema_fields:
+            # ALWAYS override user_id with actual value from session context
+            if user_id and isinstance(input_schema_fields, dict):
                 input_schema_fields["user_id"] = user_id
+                print(f"🔧 ASSET_AGENT: Overriding user_id with actual value: {user_id}")
             
             # Call the tool using tool_router
             try:
@@ -237,7 +232,7 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
                     "error": True
                 }
                 if session_context:
-                    await session_context.add_log("tool_error", f"Tool {tool_name} failed: {str(tool_error)}", level="error")
+                    await session_context.send_nano("tool_error", f"Tool {tool_name} failed: {str(tool_error)}", level="error")
                 return error_response
 
             # Check if tool returned an error
@@ -249,12 +244,12 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
                     "error": True
                 }
                 if session_context:
-                    await session_context.add_log("tool_error", f"Tool {tool_name} returned error: {tool_result.get('error')}", level="error")
+                    await session_context.send_nano("tool_error", f"Tool {tool_name} returned error: {tool_result.get('error')}", level="error")
                 print(f"=== ASSET_AGENT: RETURNING ERROR RESPONSE: {error_response} ===")
                 return error_response
 
             if session_context:
-                await session_context.add_log("tool_result", f"Tool {tool_name} completed successfully")
+                await session_context.send_nano("tool_result", f"Tool {tool_name} completed successfully")
                 
                 # Create JSON serializable version of tool_result
                 def json_serializable(obj):
@@ -307,7 +302,7 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
             print(f"=== ASSET_AGENT: Follow-up query: {follow_up_query} ===")
 
             if session_context:
-                await session_context.add_log("model_call", "Asset agent processing tool result")
+                await session_context.send_nano("model_call", "Asset agent processing tool result")
                 await session_context.append_and_persist_memory(
                     "asset_agent",
                     f"Follow-up model call: Processing tool results for next step",
@@ -360,6 +355,6 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
         print(f"=== ASSET_AGENT: END TRACEBACK ===")
         
         if session_context:
-            await session_context.add_log("error", f"Asset agent loop error: {e}", level="error")
+            await session_context.send_nano("error", f"Asset agent loop error: {e}", level="error")
         print(f"=== ASSET_AGENT: EXCEPTION FALLBACK RETURN: {normalized} ===")
         return normalized

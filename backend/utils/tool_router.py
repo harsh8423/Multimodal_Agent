@@ -118,8 +118,26 @@ async def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> An
                                             except ImportError:
                                                 continue
                                         else:
-                                            # websocket_communication module removed; do not attempt to import
-                                            raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+                                            # Try importing from asset_crud_operations module
+                                            try:
+                                                tools_module = importlib.import_module("tools.asset_crud_operations")
+                                                if hasattr(tools_module, tool_name):
+                                                    tool_function = getattr(tools_module, tool_name)
+                                                else:
+                                                    # Try importing from todo_manager module
+                                                    try:
+                                                        tools_module = importlib.import_module("tools.todo_manager")
+                                                        if hasattr(tools_module, tool_name):
+                                                            tool_function = getattr(tools_module, tool_name)
+                                                        else:
+                                                            # websocket_communication module removed; do not attempt to import
+                                                            raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+                                                    except ImportError:
+                                                        # websocket_communication module removed; do not attempt to import
+                                                        raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
+                                            except ImportError:
+                                                # websocket_communication module removed; do not attempt to import
+                                                raise AttributeError(f"Tool '{tool_name}' not found in any tools module")
             except ImportError as e:
                 # Try importing from gemini_image module
                 tools_module = importlib.import_module("tools.gemini_image")
@@ -151,10 +169,15 @@ async def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> An
         # Prepare arguments for the tool function
         tool_args = {}
         
-        # Add input schema fields
-        for key, value in input_schema_fields.items():
-            if key in params:
-                tool_args[key] = value
+        # Special handling for manage_todos function which uses **kwargs
+        if tool_name == "manage_todos":
+            # For manage_todos, pass all input_schema_fields as kwargs
+            tool_args = input_schema_fields.copy()
+        else:
+            # Add input schema fields
+            for key, value in input_schema_fields.items():
+                if key in params:
+                    tool_args[key] = value
         
         # Add API key if the tool requires it
         api_key = get_api_key(tool_name)
@@ -212,6 +235,7 @@ def tool_router_sync(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any
                         "tools.unified_search", 
                         "tools.get_media",
                         "tools.verification_tool",
+                        "tools.todo_manager",
                         "tools.media_generation.kie_image_generation",
                         "tools.media_generation.gemini_audio", 
                         "tools.media_generation.minimax_audio_clone",
@@ -238,10 +262,15 @@ def tool_router_sync(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any
         # Prepare arguments for the tool function
         tool_args = {}
         
-        # Add input schema fields
-        for key, value in input_schema_fields.items():
-            if key in params:
-                tool_args[key] = value
+        # Special handling for manage_todos function which uses **kwargs
+        if tool_name == "manage_todos":
+            # For manage_todos, pass all input_schema_fields as kwargs
+            tool_args = input_schema_fields.copy()
+        else:
+            # Add input schema fields
+            for key, value in input_schema_fields.items():
+                if key in params:
+                    tool_args[key] = value
         
         # Add API key if the tool requires it
         api_key = get_api_key(tool_name)

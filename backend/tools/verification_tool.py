@@ -76,11 +76,10 @@ async def verification_tool(
     
     try:
         # Call the LLM for diagnosis
-        response = await openai_chatmodel(
-            messages=[{"role": "system", "content": verification_prompt}],
-            model="gpt-4",
-            temperature=0.1,  # Low temperature for consistent, deterministic analysis
-            max_tokens=2000
+        response = openai_chatmodel(
+            system_prompt=verification_prompt,
+            user_query="Please analyze the provided error information and provide a structured diagnosis.",
+            model_name="gpt-5-mini"
         )
         
         # Parse the response

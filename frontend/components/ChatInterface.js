@@ -15,7 +15,8 @@ import {
   ChevronUp,
   ChevronDown,
   Settings,
-  BarChart3
+  BarChart3,
+  ListTodo
 } from 'lucide-react';
 import Message from '@/components/Message';
 import ChatInput from '@/components/ChatInput';
@@ -24,9 +25,11 @@ import GoogleSignIn from '@/components/GoogleSignIn';
 import { cn, formatTime } from '@/lib/utils';
 import ChatHistory from '@/components/ChatHistory';
 import AssetDragDrop from '@/components/AssetDragDrop';
+import TodoList from '@/components/TodoList';
 import { MultimodalAgentClient } from '@/lib/websocket-client';
 import { authService } from '@/lib/auth';
 import { uploadToCloudinary } from '@/lib/cloudinary';
+import { todoAPI } from '@/lib/api/todos';
 import { useRouter } from 'next/navigation';
 
 const ChatInterface = ({ user: userProp }) => {
@@ -51,6 +54,9 @@ const ChatInterface = ({ user: userProp }) => {
   const [browseAssetMode, setBrowseAssetMode] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(320); // Default width in pixels
   const [isResizing, setIsResizing] = useState(false);
+  const [showTodos, setShowTodos] = useState(false);
+  const [todos, setTodos] = useState([]);
+  const [todosLoading, setTodosLoading] = useState(false);
   const router = useRouter();
 
   const clientRef = useRef(null);
@@ -64,6 +70,32 @@ const ChatInterface = ({ user: userProp }) => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Load todos when chat changes
+  useEffect(() => {
+    if (chatId && authService.token) {
+      loadTodos();
+    }
+  }, [chatId]);
+
+  const loadTodos = async () => {
+    if (!chatId || !authService.token) return;
+    
+    setTodosLoading(true);
+    try {
+      const todosData = await todoAPI.getChatTodos(chatId, authService.token);
+      setTodos(todosData);
+    } catch (error) {
+      console.error('Failed to load todos:', error);
+      setTodos([]);
+    } finally {
+      setTodosLoading(false);
+    }
+  };
+
+  const refreshTodos = () => {
+    loadTodos();
+  };
 
   useEffect(() => {
     // Prevent multiple WebSocket connections
@@ -103,7 +135,8 @@ const ChatInterface = ({ user: userProp }) => {
             timestamp: m.timestamp,
             isStreaming: false,
             mediaUrl: m.metadata?.media_url || null,
-            mediaType: m.metadata?.media_type || null
+            mediaType: m.metadata?.media_type || null,
+            metadata: m.metadata || null
           }));
           setMessages(mapped);
         }
@@ -157,7 +190,8 @@ const ChatInterface = ({ user: userProp }) => {
           timestamp: new Date().toISOString(),
           isStreaming: false,
           mediaUrl: null, // Assistant messages don't have media
-          mediaType: null
+          mediaType: null,
+          metadata: data.metadata || null
         };
         setMessages(prev => [...prev, msg]);
         setIsTyping(false);
@@ -568,6 +602,23 @@ const ChatInterface = ({ user: userProp }) => {
                 <span className="text-sm font-medium">Go To Assets</span>
               </button>
               
+              {/* Todo Lists Button */}
+              <button
+                onClick={() => setShowTodos(!showTodos)}
+                className={cn(
+                  "w-full p-3 hover:bg-gray-100 text-gray-900 rounded-lg flex items-center gap-3 transition-colors",
+                  showTodos && "bg-blue-50 text-blue-700"
+                )}
+              >
+                <ListTodo className="w-4 h-4" />
+                <span className="text-sm font-medium">Todo Lists</span>
+                {todos.length > 0 && (
+                  <span className="ml-auto text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
+                    {todos.length}
+                  </span>
+                )}
+              </button>
+              
               {/* Browse Asset Toggle */}
               <div className="flex items-center justify-between p-3 hover:bg-gray-100 rounded-lg transition-colors">
                 <span className="text-sm font-medium text-gray-700">Browse Asset</span>
@@ -588,10 +639,18 @@ const ChatInterface = ({ user: userProp }) => {
           )}
         </div>
 
-        {/* Content Area - Chat History or Asset Manager */}
+        {/* Content Area - Chat History, Asset Manager, or Todo Lists */}
         <div className="flex-1 overflow-y-auto">
           {!sidebarCollapsed && (
-            browseAssetMode ? (
+            showTodos ? (
+              <div className="p-4">
+                <TodoList
+                  chatId={chatId}
+                  todos={todos}
+                  onRefresh={refreshTodos}
+                />
+              </div>
+            ) : browseAssetMode ? (
               <AssetDragDrop
                 isOpen={true}
                 onClose={() => setBrowseAssetMode(false)}

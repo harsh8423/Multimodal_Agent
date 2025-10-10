@@ -48,12 +48,16 @@ app.include_router(auth_router)
 app.include_router(chats_router)
 
 # Include social media management routes
-from routes import brands, templates, competitors, scraped_posts, scraping
+from routes import brands, templates, competitors, scraped_posts, scraping, todos
 app.include_router(brands.router)
 app.include_router(templates.router)
 app.include_router(competitors.router)
 app.include_router(scraped_posts.router)
 app.include_router(scraping.router)
+app.include_router(todos.router)
+
+# Import asset agent for HTTP endpoint
+from agents.asset_agent import asset_agent
 
 @app.get("/")
 async def root():
@@ -66,7 +70,9 @@ async def root():
             "templates": "/api/templates",
             "competitors": "/api/competitors",
             "scraped_posts": "/api/scraped-posts",
-            "scraping": "/api/scraping"
+            "scraping": "/api/scraping",
+            "todos": "/api/todos",
+            "asset_manager_chat": "/api/asset-manager/chat"
         }
     }
 
@@ -438,7 +444,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 print(f"[main.py] Message signature: '{target_signature}'")
                 print(f"[main.py] Message content: {message.get('text', '')[:100]}...")
 
-                if target_signature in ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "media_activist", "copy_writer"):
+                if target_signature in ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "media_activist", "copy_writer", "todo_planner"):
                     from utils.router import call_agent
                     user_text = message.get("text", "") if isinstance(message, dict) else str(message)
                     result = await call_agent(
@@ -454,15 +460,23 @@ async def websocket_endpoint(websocket: WebSocket):
                     
                     try:
                         agent_text = result.get("text", "") if isinstance(result, dict) else str(result)
+                        agent_metadata = result.get("metadata") if isinstance(result, dict) else None
                     except Exception:
                         agent_text = str(result)
+                        agent_metadata = None
                     
                     # Only send response if there's actual content
                     if agent_text and agent_text.strip():
-                        await websocket.send_json({
+                        response_payload = {
                             "text": agent_text,
                             "agent_name": target_signature
-                        })
+                        }
+                        
+                        # Include metadata if present (for todo data, etc.)
+                        if agent_metadata:
+                            response_payload["metadata"] = agent_metadata
+                        
+                        await websocket.send_json(response_payload)
                 else:
                     # Default social media manager flow
                     await social_media_manager(message, websocket, session_context=session_context, model_name="gpt-5-mini", debug=False)
@@ -495,6 +509,82 @@ async def websocket_endpoint(websocket: WebSocket):
             await session_context.add_log("error", f"Unexpected error: {str(e)}", level="error")
             await remove_session(session_context.session_id)
         raise
+
+
+# HTTP endpoint for asset manager AI assistant
+@app.post("/api/asset-manager/chat")
+async def asset_manager_chat(
+    request: dict,
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())
+):
+    """
+    HTTP endpoint for asset manager AI assistant
+    Accepts chat messages and returns AI responses using asset_agent
+    """
+    try:
+        # Verify authentication
+        user_id = auth_service.verify_token(credentials.credentials)
+        if not user_id:
+            return {"error": "Invalid authentication token"}, 401
+        
+        # Extract request data
+        message = request.get("message", "")
+        chat_history = request.get("chat_history", [])
+        selected_brand = request.get("selected_brand", None)
+        
+        if not message.strip():
+            return {"error": "Message cannot be empty"}, 400
+        
+        # Build enhanced query with chat history context
+        enhanced_query = message
+        
+        # Add chat history context to the query
+        if chat_history:
+            history_context = "Previous conversation:\n"
+            for msg in chat_history[-10:]:  # Last 10 messages
+                role = msg.get("sender", "unknown")
+                content = msg.get("text", "")
+                if role == "user":
+                    history_context += f"User: {content}\n"
+                elif role == "agent":
+                    history_context += f"Assistant: {content}\n"
+            
+            enhanced_query = f"{history_context}\nCurrent message: {message}"
+        
+        # Add selected brand context if available
+        if selected_brand:
+            brand_context = f"\n\nCurrent selected brand: {selected_brand.get('name', 'Unknown')} (ID: {selected_brand.get('id', 'Unknown')})"
+            enhanced_query += brand_context
+        
+        # Call asset agent with enhanced query
+        result = await asset_agent(
+            query=enhanced_query,
+            model_name="gpt-4o-mini",
+            user_id=user_id,
+            user_metadata={"selected_brand": selected_brand} if selected_brand else None
+        )
+        
+        # Extract response text
+        if isinstance(result, dict):
+            response_text = result.get("text", str(result))
+        else:
+            response_text = str(result)
+        
+        return {
+            "success": True,
+            "response": response_text,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"Asset manager chat error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": f"Internal server error: {str(e)}",
+            "timestamp": datetime.utcnow().isoformat()
+        }, 500
 
 
 if __name__ == "__main__":

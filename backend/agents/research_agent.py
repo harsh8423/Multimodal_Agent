@@ -196,6 +196,12 @@ async def research_agent(query: str, model_name: str = "gpt-5-mini",
                         merged.update(item)
                 input_schema_fields = merged
 
+            # ALWAYS override user_id with actual value from session context
+            user_id = getattr(session_context, 'user_id', None) if session_context else None
+            if user_id and isinstance(input_schema_fields, dict):
+                input_schema_fields["user_id"] = user_id
+                print(f"🔧 RESEARCH_AGENT: Overriding user_id with actual value: {user_id}")
+
             # Log tool call
             if session_context:
                 await session_context.send_nano("research_agent", f"tool → {tool_name}")

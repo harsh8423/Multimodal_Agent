@@ -5,7 +5,7 @@ import { templatesAPI, brandsAPI, socialMediaUtils } from '@/lib/api/socialMedia
 import TemplateForm from './TemplateForm';
 import TemplateCard from './TemplateCard';
 
-export default function TemplatesTab({ onUpdate }) {
+export default function TemplatesTab({ onUpdate, brandId }) {
   const [templates, setTemplates] = useState([]);
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,7 +13,6 @@ export default function TemplatesTab({ onUpdate }) {
   const [showForm, setShowForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -28,7 +27,7 @@ export default function TemplatesTab({ onUpdate }) {
 
   useEffect(() => {
     loadTemplates();
-  }, [currentPage, searchTerm, selectedBrand, selectedType, selectedStatus]);
+  }, [currentPage, searchTerm, selectedType, selectedStatus, brandId]);
 
   const loadBrands = async () => {
     try {
@@ -48,7 +47,7 @@ export default function TemplatesTab({ onUpdate }) {
         page: currentPage,
         limit,
         ...(searchTerm && { search: searchTerm }),
-        ...(selectedBrand && { brand_id: selectedBrand }),
+        ...(brandId && { brand_id: brandId }),
         ...(selectedType && { type: selectedType }),
         ...(selectedStatus && { status: selectedStatus }),
       };
@@ -188,25 +187,6 @@ export default function TemplatesTab({ onUpdate }) {
               />
             </div>
 
-            {/* Brand Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
-              <select
-                value={selectedBrand}
-                onChange={(e) => {
-                  setSelectedBrand(e.target.value);
-                  handleFilterChange();
-                }}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Brands</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </select>
-            </div>
 
             {/* Type Filter */}
             <div>

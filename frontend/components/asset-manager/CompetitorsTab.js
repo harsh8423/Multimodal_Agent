@@ -5,7 +5,7 @@ import { competitorsAPI, brandsAPI, socialMediaUtils } from '@/lib/api/socialMed
 import CompetitorForm from './CompetitorForm';
 import CompetitorCard from './CompetitorCard';
 
-export default function CompetitorsTab({ onUpdate }) {
+export default function CompetitorsTab({ onUpdate, brandId }) {
   const [competitors, setCompetitors] = useState([]);
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,7 +13,6 @@ export default function CompetitorsTab({ onUpdate }) {
   const [showForm, setShowForm] = useState(false);
   const [editingCompetitor, setEditingCompetitor] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -27,7 +26,7 @@ export default function CompetitorsTab({ onUpdate }) {
 
   useEffect(() => {
     loadCompetitors();
-  }, [currentPage, searchTerm, selectedBrand, selectedPlatform]);
+  }, [currentPage, searchTerm, selectedPlatform, brandId]);
 
   const loadBrands = async () => {
     try {
@@ -47,7 +46,7 @@ export default function CompetitorsTab({ onUpdate }) {
         page: currentPage,
         limit,
         ...(searchTerm && { search: searchTerm }),
-        ...(selectedBrand && { brand_id: selectedBrand }),
+        ...(brandId && { brand_id: brandId }),
         ...(selectedPlatform && { platform: selectedPlatform }),
       };
 
@@ -179,25 +178,6 @@ export default function CompetitorsTab({ onUpdate }) {
               />
             </div>
 
-            {/* Brand Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
-              <select
-                value={selectedBrand}
-                onChange={(e) => {
-                  setSelectedBrand(e.target.value);
-                  handleFilterChange();
-                }}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Brands</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </select>
-            </div>
 
             {/* Platform Filter */}
             <div>

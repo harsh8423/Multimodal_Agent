@@ -243,6 +243,12 @@ async def media_activist(query: str, model_name: str = "gpt-5-mini",
                         merged.update(item)
                 input_schema_fields = merged
 
+            # ALWAYS override user_id with actual value from session context
+            user_id = getattr(session_context, 'user_id', None) if session_context else None
+            if user_id and isinstance(input_schema_fields, dict):
+                input_schema_fields["user_id"] = user_id
+                print(f"🔧 MEDIA_ACTIVIST: Overriding user_id with actual value: {user_id}")
+
             # Log tool call
             if session_context:
                 await session_context.send_nano("media_activist", f"tool → {tool_name}")

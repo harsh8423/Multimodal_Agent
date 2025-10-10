@@ -5,7 +5,7 @@ import { scrapingAPI, brandsAPI, competitorsAPI, socialMediaUtils } from '@/lib/
 import ScrapingForm from './ScrapingForm';
 import ScrapingHistory from './ScrapingHistory';
 
-export default function ScrapingTab({ onUpdate }) {
+export default function ScrapingTab({ onUpdate, brandId }) {
   const [brands, setBrands] = useState([]);
   const [competitors, setCompetitors] = useState([]);
   const [supportedPlatforms, setSupportedPlatforms] = useState([]);

@@ -208,6 +208,12 @@ async def social_media_search_agent(query: str, model_name: str = "gpt-4o",
                 print(f"Warning: input_schema_fields is not a dict: {type(input_schema_fields)}")
                 return {"text": str(last_normalized)}
 
+            # ALWAYS override user_id with actual value from session context
+            user_id = getattr(session_context, 'user_id', None) if session_context else None
+            if user_id and isinstance(input_schema_fields, dict):
+                input_schema_fields["user_id"] = user_id
+                print(f"🔧 SOCIAL_MEDIA_SEARCH_AGENT: Overriding user_id with actual value: {user_id}")
+
             # Log tool call
             if session_context:
                 await session_context.send_nano("social_media_search_agent", f"tool → {tool_name}")
