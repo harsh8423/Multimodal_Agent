@@ -64,6 +64,8 @@ class TodoManager:
             Dictionary with todo_id and created todo data
         """
         try:
+            print(f"🔍 CREATE_TODO DEBUG: Received chat_id={chat_id}, agent_name={agent_name}")
+            
             todo_doc = {
                 "chat_id": chat_id,
                 "created_by": agent_name,
@@ -73,6 +75,8 @@ class TodoManager:
                 "tasks": tasks,
                 "status": "active"  # active, completed, cancelled
             }
+            
+            print(f"🔍 CREATE_TODO DEBUG: About to save todo_doc with chat_id={todo_doc['chat_id']}")
             
             result = await self.todos_collection.insert_one(todo_doc)
             todo_id = str(result.inserted_id)
@@ -340,12 +344,33 @@ async def manage_todos(action: str, **kwargs) -> Dict[str, Any]:
             agent_name = kwargs.get("agent_name")
             tasks = kwargs.get("tasks", [])
             title = kwargs.get("title")
+            user_id = kwargs.get("user_id")
+            
+            print(f"🔍 TODO CREATE DEBUG: chat_id={chat_id}, user_id={user_id}, agent_name={agent_name}")
             
             if not chat_id or not agent_name:
                 return {"success": False, "error": "chat_id and agent_name are required"}
             
+            # Validate chat_id is not user_id
+            if user_id and chat_id == user_id:
+                print(f"❌ VALIDATION FAILED: chat_id equals user_id: {chat_id}")
+                return {"success": False, "error": f"Invalid chat_id: '{chat_id}'. chat_id cannot be the same as user_id. Use the actual chat session ID."}
+            
+            print(f"✅ Validation passed: chat_id={chat_id}, user_id={user_id}")
+            
+            print(f"🔍 MANAGE_TODOS: About to call create_todo with chat_id={chat_id}")
             result = await todo_manager.create_todo(chat_id, agent_name, tasks, title)
             print(f"📝 create_todo result: {result}")
+            
+            # Verify the saved chat_id
+            if result.get("success") and result.get("todo_data"):
+                saved_chat_id = result["todo_data"].get("chat_id")
+                print(f"🔍 MANAGE_TODOS: Saved chat_id in MongoDB: {saved_chat_id}")
+                if saved_chat_id != chat_id:
+                    print(f"❌ MISMATCH: Expected chat_id={chat_id}, but saved chat_id={saved_chat_id}")
+                else:
+                    print(f"✅ MATCH: chat_id correctly saved as {saved_chat_id}")
+            
             return serialize_for_json(result)
             
         elif action == "update":
@@ -356,6 +381,10 @@ async def manage_todos(action: str, **kwargs) -> Dict[str, Any]:
             
             if not todo_id or step_num is None:
                 return {"success": False, "error": "todo_id and step_num are required"}
+            
+            # Validate todo_id format - reject user_id + "_todo" patterns
+            if "_todo" in todo_id and len(todo_id) > 24:
+                return {"success": False, "error": f"Invalid todo_id format: '{todo_id}'. Use the MongoDB ObjectId returned from create action, not user_id + '_todo'"}
             
             result = await todo_manager.update_todo_task(todo_id, step_num, updates)
             print(f"📝 update_todo_task result: {result}")

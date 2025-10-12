@@ -29,7 +29,7 @@ def orchestrator_function(system_prompt: str, user_query: str, model_name: str =
     try:
         # Create the chat completion request using the new API
         response = client.chat.completions.create(
-            model=model_name,
+            model="gpt-5-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_query}
@@ -38,6 +38,10 @@ def orchestrator_function(system_prompt: str, user_query: str, model_name: str =
         )
         
         # Extract the response content
+        if response.choices[0].message.content is None:
+            return {
+                "error": "API call failed: No response content received from OpenAI"
+            }
         response_content = response.choices[0].message.content.strip()
         
         # Try to parse the JSON response

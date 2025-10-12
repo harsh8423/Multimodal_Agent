@@ -6,21 +6,29 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from utils.build_prompts import build_system_prompt
 
-from utils.utility import _call_openai_chatmodel, _normalize_model_output
+from utils.utility import chat_model_router, _normalize_model_output
 from utils.tool_router import tool_router
 from utils.session_memory import SessionContext
 from utils.mongo_store import save_chat_message
+from config.chat_model_config import get_final_config
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 
 
-async def media_analyst(query: str, model_name: str = "gpt-4o",
+async def media_analyst(query: str, model_name: Optional[str] = None, chat_llm_model: Optional[str] = None,
                         registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
                         user_metadata: Optional[Dict] = None, user_image_path: Optional[str] = None) -> Any:
     """
     Build media_analyst system prompt from registry and call the chat model with the query.
     This agent performs direct analysis without multi-step operations or rechecking messages.
     """
+    # Get chat model configuration from central config
+    config = get_final_config(agent_name="media_analyst")
+    
+    # Use provided parameters or fall back to config
+    final_model_name = model_name or config["model_name"]
+    final_chat_llm_model = chat_llm_model or config["chat_llm_model"]
+    
     # Log media analyst start
     if session_context:
         await session_context.send_nano("media_analyst", "starting…")
@@ -134,7 +142,7 @@ async def media_analyst(query: str, model_name: str = "gpt-4o",
             {"phase": "analysis", "query": query[:100]}
         )
     
-    raw = await _call_openai_chatmodel(system_prompt, enhanced_query, model_name)
+        raw = await chat_model_router(system_prompt, enhanced_query, final_chat_llm_model, final_model_name)
     normalized = await _normalize_model_output(raw)
 
     if session_context:
@@ -234,7 +242,9 @@ async def media_analyst(query: str, model_name: str = "gpt-4o",
             
     except json.JSONDecodeError as e:
         error_msg = f"Error parsing agent response as JSON: {e}"
-        print(error_msg)
+        print(f"❌ MEDIA_ANALYST JSON ERROR: {error_msg}")
+        import traceback
+        traceback.print_exc()
         
         if session_context:
             await session_context.send_nano("media_analyst", "Error parsing agent response as JSON")
@@ -242,7 +252,9 @@ async def media_analyst(query: str, model_name: str = "gpt-4o",
         return normalized
     except Exception as e:
         error_msg = f"Error in media_analyst: {e}"
-        print(error_msg)
+        print(f"❌ MEDIA_ANALYST ERROR: {error_msg}")
+        import traceback
+        traceback.print_exc()
         
         if session_context:
             await session_context.send_nano("media_analyst", "Error in media_analyst")

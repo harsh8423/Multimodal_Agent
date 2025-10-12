@@ -11,7 +11,8 @@ This tool analyzes failed or suspicious agent/tool executions and provides:
 import json
 import asyncio
 from typing import Any, Dict, List, Optional, Union
-from models.chat_openai import orchestrator_function as openai_chatmodel
+from utils.utility import chat_model_router
+from config.chat_model_config import get_final_config
 
 
 async def verification_tool(
@@ -75,11 +76,15 @@ async def verification_tool(
     )
     
     try:
+        # Get chat model configuration from central config
+        config = get_final_config(tool_name="verification_tool")
+        
         # Call the LLM for diagnosis
-        response = openai_chatmodel(
+        response = await chat_model_router(
             system_prompt=verification_prompt,
             user_query="Please analyze the provided error information and provide a structured diagnosis.",
-            model_name="gpt-5-mini"
+            chat_llm_model=config["chat_llm_model"],
+            model_name=config["model_name"]
         )
         
         # Parse the response

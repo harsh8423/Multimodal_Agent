@@ -37,6 +37,72 @@ def get_api_key(tool_name: str) -> Optional[str]:
         return None
     return os.getenv(env_var)
 
+def filter_tool_parameters(tool_name: str, input_schema_fields: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Filter input parameters to only include valid parameters for the specified tool.
+    This prevents type mismatches and invalid objects from being passed to tools.
+    
+    Args:
+        tool_name: Name of the tool
+        input_schema_fields: Dictionary of input parameters
+        
+    Returns:
+        Filtered dictionary with only valid parameters
+    """
+    # Define valid parameters for each tool to prevent type mismatches
+    valid_params_by_tool = {
+        "microsoft_tts": {"text", "voice_name", "style", "subscription_key", "region"},
+        "gemini_audio": {"text", "voice_name", "voice_style"},
+        "kie_image_generation": {"prompt", "reference_image_url", "image_size", "api_key"},
+        "minimax_audio_clone": {"text", "voice_sample_url", "voice_id", "quality", "upload_to_cloudinary", "api_key"},
+        "analyze_image": {"system_prompt", "user_query", "image_urls", "model_name"},
+        "search_with_perplexity_sonar": {"search_description", "user_prompt", "model"},
+        "gemini_google_search": {"search_description", "model"},
+        "get_youtube_videos": {"query", "max_results", "order", "published_after", "published_before"},
+        "search_instagram_with_apify": {"query", "count", "sort"},
+        "unified_search": {"query", "platform", "count", "sort"},
+        "get_media": {"url", "upload_to_cloudinary_flag", "custom_config"},
+        "manage_todos": {"action", "chat_id", "agent_name", "tasks", "todo_id", "status", "description", "step_num", "updates", "title", "task", "user_id"},
+        "generate_content_plan": {"platform_name", "content_type", "user_brief"},
+        "get_user_brands": {"user_id", "search", "limit", "offset"},
+        "get_brand_by_id": {"brand_id"},
+        "get_brand_stats": {"brand_id"},
+        "get_user_competitors": {"user_id", "platform", "brand", "search", "limit", "offset"},
+        "get_competitor_by_id": {"competitor_id"},
+        "get_scraped_posts": {"user_id", "platform", "brand", "competitor", "date_from", "date_to", "engagement_min", "engagement_max", "text_search", "limit", "offset"},
+        "get_user_templates": {"user_id", "type", "status", "limit", "offset"},
+        "get_template_by_id": {"template_id"},
+        "create_brand": {"user_id", "name", "description", "website", "industry", "target_audience"},
+        "update_brand": {"brand_id", "name", "description", "website", "industry", "target_audience"},
+        "delete_brand": {"brand_id"},
+        "create_competitor": {"user_id", "name", "platform", "brand", "description", "website", "followers"},
+        "update_competitor": {"competitor_id", "name", "platform", "brand", "description", "website", "followers"},
+        "delete_competitor": {"competitor_id"},
+        "create_template": {"user_id", "name", "type", "content", "description", "status"},
+        "update_template": {"template_id", "name", "type", "content", "description", "status"},
+        "delete_template": {"template_id"},
+        "diagnose_agent_error": {"agent_name", "error_message", "agent_query", "agent_output"}
+    }
+    
+    # Filter input_schema_fields to only include valid parameters for the current tool
+    if tool_name in valid_params_by_tool:
+        valid_params = valid_params_by_tool[tool_name]
+        filtered_fields = {k: v for k, v in input_schema_fields.items() if k in valid_params}
+        if filtered_fields != input_schema_fields:
+            invalid_params = set(input_schema_fields.keys()) - set(filtered_fields.keys())
+            print(f"🔧 TOOL_ROUTER: Filtered invalid parameters for {tool_name}: {invalid_params}")
+            return filtered_fields
+    
+    # Additional safety check: Remove any SessionContext objects
+    safe_fields = {}
+    for key, value in input_schema_fields.items():
+        if hasattr(value, '__class__') and 'SessionContext' in str(value.__class__):
+            print(f"🔧 TOOL_ROUTER: WARNING - SessionContext object found in parameter '{key}' for tool '{tool_name}' - removing")
+        else:
+            safe_fields[key] = value
+    
+    return safe_fields
+
 async def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any:
     """
     Dynamically route tool calls to the appropriate tool function in the tools directory.
@@ -62,6 +128,9 @@ async def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> An
                 if isinstance(item, dict):
                     merged_fields.update(item)
             input_schema_fields = merged_fields
+        
+        # Filter out invalid parameters to prevent type mismatches
+        input_schema_fields = filter_tool_parameters(tool_name, input_schema_fields)
         
         # Import the tools module dynamically
         tools_module = importlib.import_module("tools.research")
@@ -173,6 +242,9 @@ async def tool_router(tool_name: str, input_schema_fields: Dict[str, Any]) -> An
         if tool_name == "manage_todos":
             # For manage_todos, pass all input_schema_fields as kwargs
             tool_args = input_schema_fields.copy()
+            print("==================================================================================")
+            print(f"🔧[IMPORTANT] TOOL_ROUTER: manage_todos tool_args: {tool_args}")
+            print("==================================================================================")
         else:
             # Add input schema fields
             for key, value in input_schema_fields.items():
@@ -214,6 +286,9 @@ def tool_router_sync(tool_name: str, input_schema_fields: Dict[str, Any]) -> Any
                 if isinstance(item, dict):
                     merged_fields.update(item)
             input_schema_fields = merged_fields
+        
+        # Filter out invalid parameters to prevent type mismatches
+        input_schema_fields = filter_tool_parameters(tool_name, input_schema_fields)
         
         # Import the tools module dynamically
         tools_module = importlib.import_module("tools.research")

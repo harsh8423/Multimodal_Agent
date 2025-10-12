@@ -316,6 +316,30 @@ async def websocket_endpoint(websocket: WebSocket):
                     print(f"[chat-switch] Chat {chat_id}: existing_messages={len(existing_messages)}, is_first_message={is_first_message}")
                     
                     await session_context.hydrate_memories_from_db(chat_id)
+                    
+                    # Check for recent active todo list in the switched chat
+                    recent_todo = await session_context.check_recent_todo_list(chat_id)
+                    print(f"[chat-switch] Recent todo: {recent_todo}")
+                    if recent_todo:
+                        # Set todo_planner_state to True and add to conversation history
+                        print(f"[chat-switch] Todo list found: {recent_todo.get('title', 'Untitled')}")
+                        session_context.set_todo_planner_state(True)
+                        await session_context.append_and_persist_memory(
+                            "social_media_manager",
+                            f"Recent todo list found: {recent_todo.get('title', 'Untitled')} with {len(recent_todo.get('tasks', []))} tasks",
+                            {"todo_data": recent_todo, "action": "todo_found_on_switch"}
+                        )
+                        await send_json({
+                            "event": "nano_message",
+                            "agent": "social_media_manager",
+                            "message": "recent to-do found",
+                            "session_id": session_context.session_id,
+                            "chat_id": chat_id
+                        })
+                        print(f"[chat-switch] Todo list found: {recent_todo.get('title', 'Untitled')}")
+                    else:
+                        # Reset todo_planner_state for new chat without todos
+                        session_context.set_todo_planner_state(False)
 
                     # Suppress verbose history printing; only websocket/system/agent prints allowed
 
@@ -479,7 +503,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         await websocket.send_json(response_payload)
                 else:
                     # Default social media manager flow
-                    await social_media_manager(message, websocket, session_context=session_context, model_name="gpt-5-mini", debug=False)
+                    await social_media_manager(message, websocket, session_context=session_context, debug=False)
             except Exception as route_err:
                 await websocket.send_json({"text": f"Routing error: {route_err}"})
             continue
@@ -559,7 +583,6 @@ async def asset_manager_chat(
         # Call asset agent with enhanced query
         result = await asset_agent(
             query=enhanced_query,
-            model_name="gpt-4o-mini",
             user_id=user_id,
             user_metadata={"selected_brand": selected_brand} if selected_brand else None
         )

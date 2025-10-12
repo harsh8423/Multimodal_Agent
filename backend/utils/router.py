@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 
 from utils.build_prompts import build_system_prompt
-from utils.utility import _call_openai_chatmodel, _normalize_model_output
+from utils.utility import _normalize_model_output
 from agents.research_agent import research_agent
 from agents.asset_agent import asset_agent
 from agents.media_analyst import media_analyst
@@ -12,10 +12,11 @@ from agents.media_activist import media_activist
 from agents.copy_writer import copy_writer
 from agents.todo_planner import todo_planner
 from utils.session_memory import SessionContext
+from config.chat_model_config import get_final_config
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 
-async def call_agent(agent_name: str, query: str, model_name: str = "gpt-4o-mini",
+async def call_agent(agent_name: str, query: str, model_name: Optional[str] = None, chat_llm_model: Optional[str] = None,
                      registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
                      user_metadata: Optional[Dict] = None, user_image_path: Optional[str] = None) -> Any:
     """
@@ -25,7 +26,15 @@ async def call_agent(agent_name: str, query: str, model_name: str = "gpt-4o-mini
       - Loads the registry to get list of registered agents (no conditional matching)
       - Resolves the function by name from globals() and calls it.
       - If name resolution fails, a KeyError or NameError will be raised.
+      - Gets chat model configuration from central config file.
     """
+    # Get chat model configuration from central config
+    config = get_final_config(agent_name=agent_name)
+    
+    # Use provided parameters or fall back to config
+    final_model_name = model_name or config["model_name"]
+    final_chat_llm_model = chat_llm_model or config["chat_llm_model"]
+    
     # determine registry path
     if registry_path is None:
         registry_path = Path(__file__).parent.parent / DEFAULT_REGISTRY_FILENAME
@@ -52,10 +61,10 @@ async def call_agent(agent_name: str, query: str, model_name: str = "gpt-4o-mini
     # call the function (it should be an async function)
     # Pass user_id for asset_agent specifically and metadata for all agents
     if agent_name == "asset_agent":
-        result = await func(query, model_name=model_name, registry_path=str(registry_path), session_context=session_context, 
+        result = await func(query, model_name=final_model_name, chat_llm_model=final_chat_llm_model, registry_path=str(registry_path), session_context=session_context, 
                            user_id=user_id, user_metadata=user_metadata, user_image_path=user_image_path)
     else:
-        result = await func(query, model_name=model_name, registry_path=str(registry_path), session_context=session_context,
+        result = await func(query, model_name=final_model_name, chat_llm_model=final_chat_llm_model, registry_path=str(registry_path), session_context=session_context,
                            user_metadata=user_metadata, user_image_path=user_image_path)
     return result
 

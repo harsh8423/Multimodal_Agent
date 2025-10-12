@@ -2,14 +2,15 @@
 from typing import Any, Optional, Dict
 from pathlib import Path
 from utils.build_prompts import build_system_prompt
-from utils.utility import _call_openai_chatmodel, _normalize_model_output, _call_gemini_chatmodel
+from utils.utility import chat_model_router, _normalize_model_output
 from utils.tool_router import tool_router
 from utils.session_memory import SessionContext
 from utils.mongo_store import save_chat_message
+from config.chat_model_config import get_final_config
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 
-async def asset_agent(query: str, model_name: str = "gpt-5-mini",
+async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_model: Optional[str] = None,
                       registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
                       max_iterations: int = 5, user_id: Optional[str] = None, 
                       user_metadata: Optional[Dict] = None, user_image_path: Optional[str] = None) -> Any:
@@ -17,6 +18,12 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
     Asset agent for managing and retrieving user data including brands, competitors, scraped posts, and templates.
     Uses flexible function-based tools to handle various data retrieval and multi-task operations.
     """
+    # Get chat model configuration from central config
+    config = get_final_config(agent_name="asset_agent")
+    
+    # Use provided parameters or fall back to config
+    final_model_name = model_name or config["model_name"]
+    final_chat_llm_model = chat_llm_model or config["chat_llm_model"]
     
     # Extract user_id from session context if not provided
     if not user_id and session_context:
@@ -132,7 +139,7 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
             {"phase": "analysis", "query": query[:100], "agent_type": "asset"}
         )
 
-    raw = await _call_openai_chatmodel(system_prompt, enhanced_query, model_name)
+        raw = await chat_model_router(system_prompt, enhanced_query, final_chat_llm_model, final_model_name)
     normalized = await _normalize_model_output(raw)
 
     # Log model response
@@ -190,7 +197,7 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
                 warning_msg = f"Max iterations ({max_iterations}) reached in asset_agent; returning best-effort response."
                 print(warning_msg)
                 if session_context:
-                    await session_context.send_nano("warning", warning_msg, level="warning")
+                    await session_context.send_nano("warning", warning_msg)
                 return {"text": str(last_normalized)}
 
             tool_name = agent_state.get("tool_name")
@@ -232,7 +239,7 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
                     "error": True
                 }
                 if session_context:
-                    await session_context.send_nano("tool_error", f"Tool {tool_name} failed: {str(tool_error)}", level="error")
+                    await session_context.send_nano("tool_error", f"Tool {tool_name} failed: {str(tool_error)}")
                 return error_response
 
             # Check if tool returned an error
@@ -244,7 +251,7 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
                     "error": True
                 }
                 if session_context:
-                    await session_context.send_nano("tool_error", f"Tool {tool_name} returned error: {tool_result.get('error')}", level="error")
+                    await session_context.send_nano("tool_error", f"Tool {tool_name} returned error: {tool_result.get('error')}")
                 print(f"=== ASSET_AGENT: RETURNING ERROR RESPONSE: {error_response} ===")
                 return error_response
 
@@ -311,7 +318,7 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
 
             print(f"=== ASSET_AGENT: Calling follow-up model with query: {follow_up_query[:200]}... ===")
             try:
-                next_raw = await _call_openai_chatmodel(system_prompt, follow_up_query, model_name)
+                next_raw = await chat_model_router(system_prompt, follow_up_query, final_chat_llm_model, final_model_name)
                 print(f"=== ASSET_AGENT: Raw model response: {next_raw} ===")
             except Exception as model_error:
                 print(f"=== ASSET_AGENT: MODEL CALL ERROR: {model_error} ===")
@@ -355,6 +362,6 @@ async def asset_agent(query: str, model_name: str = "gpt-5-mini",
         print(f"=== ASSET_AGENT: END TRACEBACK ===")
         
         if session_context:
-            await session_context.send_nano("error", f"Asset agent loop error: {e}", level="error")
+            await session_context.send_nano("error", f"Asset agent loop error: {e}")
         print(f"=== ASSET_AGENT: EXCEPTION FALLBACK RETURN: {normalized} ===")
         return normalized

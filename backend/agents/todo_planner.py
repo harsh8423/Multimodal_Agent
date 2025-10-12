@@ -5,15 +5,16 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 from utils.build_prompts import build_system_prompt
-from utils.utility import _call_openai_chatmodel, _normalize_model_output
+from utils.utility import chat_model_router, _normalize_model_output
 from utils.tool_router import tool_router
 from utils.session_memory import SessionContext
 from utils.mongo_store import save_chat_message
+from config.chat_model_config import get_final_config
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 
 
-async def todo_planner(query: str, model_name: str = "gpt-5-mini",
+async def todo_planner(query: str, model_name: Optional[str] = None, chat_llm_model: Optional[str] = None,
                       registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
                       max_iterations: int = 5, user_metadata: Optional[Dict] = None, 
                       user_image_path: Optional[str] = None) -> Any:
@@ -33,6 +34,12 @@ async def todo_planner(query: str, model_name: str = "gpt-5-mini",
     - Task breakdown and organization
     - Progress tracking and updates
     """
+    # Get chat model configuration from central config
+    config = get_final_config(agent_name="todo_planner")
+    
+    # Use provided parameters or fall back to config
+    final_model_name = model_name or config["model_name"]
+    final_chat_llm_model = chat_llm_model or config["chat_llm_model"]
     
     # Log todo_planner start
     if session_context:
@@ -53,6 +60,9 @@ async def todo_planner(query: str, model_name: str = "gpt-5-mini",
         
         # Get chat conversation history
         if session_context.chat_id:
+            print("==================================================================================")
+            print(f"🔧[IMPORTANT] TODO_PLANNER: Getting chat messages for chat_id: {session_context.chat_id}")
+            print("==================================================================================")
             from utils.mongo_store import get_chat_messages
             chat_messages = await get_chat_messages(session_context.chat_id, limit=20)
             if chat_messages:
@@ -133,10 +143,11 @@ async def todo_planner(query: str, model_name: str = "gpt-5-mini",
     print(f"=== TODO_PLANNER: System prompt length: {len(system_prompt)} ===")
 
     # Call the chat model with the query
-    response = await _call_openai_chatmodel(
+    response = await chat_model_router(
         system_prompt=system_prompt,
         user_query=query,
-        model_name=model_name
+        chat_llm_model=final_chat_llm_model,
+        model_name=final_model_name
     )
 
     print("=== TODO_PLANNER: Raw response from chat model ===")
@@ -207,6 +218,9 @@ async def todo_planner(query: str, model_name: str = "gpt-5-mini",
             # Handle tool execution
             tool_name = agent_state.get("tool_name", "").strip()
             input_schema_fields = agent_state.get("input_schema_fields", {})
+            print("==================================================================================")
+            print(f"🔧[IMPORTANT] TODO_PLANNER: input_schema_fields: {input_schema_fields}")
+            print("==================================================================================")
 
             if not tool_name:
                 print("=== TODO_PLANNER: Tool required but no tool_name provided ===")
@@ -215,28 +229,55 @@ async def todo_planner(query: str, model_name: str = "gpt-5-mini",
                 return {"text": "Tool required but no tool_name provided", "error": True}
 
             # ALWAYS override user_id with actual value from session context
-            if user_id and isinstance(input_schema_fields, dict):
-                input_schema_fields["user_id"] = user_id
-                print(f"🔧 TODO_PLANNER: Overriding user_id with actual value: {user_id}")
+            user_id = getattr(session_context, 'user_id', None) if session_context else None
+            if user_id:
+                if isinstance(input_schema_fields, dict):
+                    input_schema_fields["user_id"] = user_id
+                    print(f"🔧 TODO_PLANNER: Overriding user_id with actual value: {user_id}")
+                elif isinstance(input_schema_fields, list):
+                    # Handle list format - override user_id in each dict
+                    for i, item in enumerate(input_schema_fields):
+                        if isinstance(item, dict):
+                            item["user_id"] = user_id
+                    print(f"🔧 TODO_PLANNER: Overriding user_id with actual value: {user_id} (in list format)")
             
-            # For todo tools, ALWAYS override chat_id with actual value from session context
+            # ALWAYS override chat_id with actual value from session context for ALL tools
+            chat_id = getattr(session_context, 'chat_id', None) if session_context else None
+            
+            # Handle both dict and list formats for input_schema_fields
+            if isinstance(input_schema_fields, dict):
+                old_chat_id = input_schema_fields.get("chat_id", "NOT_SET")
+                input_schema_fields["chat_id"] = chat_id
+                print(f"🔧 TODO_PLANNER: OVERRIDING chat_id from '{old_chat_id}' to '{chat_id}' (from session_context)")
+            elif isinstance(input_schema_fields, list):
+                # Handle list format - override chat_id in each dict
+                for i, item in enumerate(input_schema_fields):
+                    if isinstance(item, dict):
+                        old_chat_id = item.get("chat_id", "NOT_SET")
+                        item["chat_id"] = chat_id
+                        print(f"🔧 TODO_PLANNER: OVERRIDING chat_id[{i}] from '{old_chat_id}' to '{chat_id}' (from session_context)")
+            
+            if not chat_id:
+                print(f"⚠️ WARNING: No chat_id available in session_context for tool {tool_name}")
+                # Use a fallback chat_id to prevent errors
+                fallback_chat_id = f"fallback_{session_context.session_id if session_context else 'unknown'}"
+                if isinstance(input_schema_fields, dict):
+                    input_schema_fields["chat_id"] = fallback_chat_id
+                elif isinstance(input_schema_fields, list):
+                    for item in input_schema_fields:
+                        if isinstance(item, dict):
+                            item["chat_id"] = fallback_chat_id
+                print(f"🔧 TODO_PLANNER: Using fallback chat_id: {fallback_chat_id}")
+            
+            # Add agent name for todo tools
             if tool_name in ["manage_todos", "create_todo_list", "update_todo_task_status", "get_next_todo_task", "add_todo_task", "get_chat_todos"]:
-                chat_id = getattr(session_context, 'chat_id', None) if session_context else None
-                
-                if chat_id and isinstance(input_schema_fields, dict):
-                    input_schema_fields["chat_id"] = chat_id
-                    print(f"🔧 TODO_PLANNER: Overriding chat_id with actual value: {chat_id}")
-                elif not chat_id:
-                    print(f"⚠️ WARNING: No chat_id available in session_context for tool {tool_name}")
-                    # Use a fallback chat_id to prevent errors
-                    if isinstance(input_schema_fields, dict):
-                        fallback_chat_id = f"fallback_{session_context.session_id if session_context else 'unknown'}"
-                        input_schema_fields["chat_id"] = fallback_chat_id
-                        print(f"🔧 TODO_PLANNER: Using fallback chat_id: {fallback_chat_id}")
-                
-                # Add agent name for todo tools
                 if isinstance(input_schema_fields, dict) and "agent_name" not in input_schema_fields:
                     input_schema_fields["agent_name"] = "todo_planner"
+                elif isinstance(input_schema_fields, list):
+                    # Handle list format - add agent_name to each dict
+                    for item in input_schema_fields:
+                        if isinstance(item, dict) and "agent_name" not in item:
+                            item["agent_name"] = "todo_planner"
             
             # Call the tool using tool_router
             try:
@@ -253,7 +294,7 @@ async def todo_planner(query: str, model_name: str = "gpt-5-mini",
                     "error": True
                 }
                 if session_context:
-                    await session_context.send_nano("tool_error", f"Tool {tool_name} failed: {str(tool_error)}", level="error")
+                    await session_context.send_nano("tool_error", f"Tool {tool_name} failed: {str(tool_error)}")
                 return error_response
 
             # Check if tool returned an error
@@ -265,7 +306,7 @@ async def todo_planner(query: str, model_name: str = "gpt-5-mini",
                     "error": True
                 }
                 if session_context:
-                    await session_context.send_nano("tool_error", f"Tool {tool_name} returned error: {tool_result.get('error')}", level="error")
+                    await session_context.send_nano("tool_error", f"Tool {tool_name} returned error: {tool_result.get('error')}")
                 print(f"=== TODO_PLANNER: RETURNING ERROR RESPONSE: {error_response} ===")
                 return error_response
 
@@ -296,10 +337,11 @@ async def todo_planner(query: str, model_name: str = "gpt-5-mini",
             tool_result_text = str(tool_result) if tool_result else "Tool executed successfully"
             
             # Call the chat model again with the tool result
-            follow_up_response = await _call_openai_chatmodel(
+            follow_up_response = await chat_model_router(
                 system_prompt=system_prompt,
                 user_query=f"Previous response: {normalized}\n\nTool {tool_name} result: {tool_result_text}\n\nContinue processing.",
-                model_name=model_name
+                chat_llm_model=final_chat_llm_model,
+                model_name=final_model_name
             )
 
             print("=== TODO_PLANNER: Follow-up response from chat model ===")
@@ -330,14 +372,18 @@ async def todo_planner(query: str, model_name: str = "gpt-5-mini",
             iteration += 1
 
     except json.JSONDecodeError as e:
-        print(f"=== TODO_PLANNER: JSON decode error: {e} ===")
+        print(f"❌ TODO_PLANNER JSON ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         if session_context:
-            await session_context.send_nano("todo_planner", f"JSON decode error: {str(e)}", level="error")
+            await session_context.send_nano("todo_planner", f"JSON decode error: {str(e)}")
         return {"text": f"JSON decode error: {str(e)}", "error": True}
     except Exception as e:
-        print(f"=== TODO_PLANNER: Unexpected error: {e} ===")
+        print(f"❌ TODO_PLANNER ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         if session_context:
-            await session_context.send_nano("todo_planner", f"Unexpected error: {str(e)}", level="error")
+            await session_context.send_nano("todo_planner", f"Unexpected error: {str(e)}")
         return {"text": f"Unexpected error: {str(e)}", "error": True}
 
     print("=== TODO_PLANNER: Final return ===")

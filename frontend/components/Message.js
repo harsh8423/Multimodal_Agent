@@ -61,7 +61,7 @@ const Message = ({
     return transformed.join('');
   };
 
-  const renderedMessage = linkifyMessage(message);
+  const renderedMessage = typeof message === 'string' ? linkifyMessage(message) : String(message);
 
   const handleCopy = async () => {
     const success = await copyToClipboard(message);

@@ -1,0 +1,85 @@
+{
+  "defaults": {
+    "chat_llm_model": "openai",
+    "model_name": "gpt-5-mini"
+  },
+  "agents": {
+    "research_agent": {
+      "chat_llm_model": "gemini",
+      "model_name": "gemini-2.5-flash"
+    },
+    "asset_agent": {
+      "chat_llm_model": "openai",
+      "model_name": "gpt-5-mini"
+    },
+    "media_analyst": {
+      "chat_llm_model": "gemini",
+      "model_name": "gemini-2.5-flash"
+    },
+    "social_media_search_agent": {
+      "chat_llm_model": "openai",
+      "model_name": "gpt-5-mini"
+    },
+    "media_activist": {
+      "chat_llm_model": "openai",
+      "model_name": "gpt-4o-mini"
+    },
+    "copy_writer": {
+      "chat_llm_model": "openai",
+      "model_name": "gpt-4o-mini"
+    },
+    "todo_planner": {
+      "chat_llm_model": "gemini",
+      "model_name": "gemini-2.5-flash"
+    },
+    "social_media_manager": {
+      "chat_llm_model": "groq",
+      "model_name": "openai/gpt-oss-120b"
+    }
+  },
+  "tools": {
+    "verification_tool": {
+      "chat_llm_model": "openai",
+      "model_name": "gpt-4o-mini"
+    },
+    "title_generator": {
+      "chat_llm_model": "gemini",
+      "model_name": "gemini-2.5-flash"
+    },
+    "gemini_image": {
+      "chat_llm_model": "gemini",
+      "model_name": "gemini-2.5-flash"
+    },
+    "gemini_video": {
+      "chat_llm_model": "gemini",
+      "model_name": "gemini-2.5-pro"
+    }
+  },
+  "models": {
+    "openai": {
+      "default_model": "gpt-4o-mini",
+      "available_models": [
+        "gpt-5-mini",
+        "gpt-4o-mini",
+        "gpt-5",
+        "gpt-4o"
+      ]
+    },
+    "gemini": {
+      "default_model": "gemini-2.5-flash",
+      "available_models": [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro"
+      ]
+    },
+    "groq": {
+      "default_model": "llama-3.1-8b-instant",
+      "available_models": [
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+        "mixtral-8x7b-32768",
+        "openai/gpt-oss-120b"
+      ]
+    }
+  }
+}

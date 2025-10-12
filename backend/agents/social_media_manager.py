@@ -6,12 +6,12 @@ from pathlib import Path
 
 # Import the build_prompts function and chat model
 from utils.build_prompts import build_system_prompt
-from models.chat_openai import orchestrator_function as openai_chatmodel
-from utils.utility import _call_openai_chatmodel, _normalize_model_output
+from utils.utility import chat_model_router, _normalize_model_output
 from utils.router import call_agent
 from utils.tool_router import tool_router
 from utils.session_memory import SessionContext
 from utils.mongo_store import save_chat_message
+from config.chat_model_config import get_final_config
 
 
 async def _maybe_await(value):
@@ -26,12 +26,20 @@ async def _maybe_await(value):
 async def social_media_manager(
     message: Dict[str, Any],
     websocket,
-    model_name: str = "gpt-5-mini",
+    model_name: Optional[str] = None,
+    chat_llm_model: Optional[str] = None,
     session_context: Optional[SessionContext] = None,
     max_iterations: int = 5,
     *,
     debug: bool = False,
 ) -> Dict[str, Any]:
+    # Get chat model configuration from central config
+    config = get_final_config(agent_name="social_media_manager")
+    
+    # Use provided parameters or fall back to config
+    final_model_name = model_name or config["model_name"]
+    final_chat_llm_model = chat_llm_model or config["chat_llm_model"]
+    
     user_text = ""
     user_metadata = {}
     user_image_path = None
@@ -194,6 +202,21 @@ async def social_media_manager(
         if chat_history_context:
             system_prompt += f"\n\n{chat_history_context}"
         
+        # Add todo list context if todo_planner_state is active
+        if session_context and session_context.get_todo_planner_state():
+            todo_context = """
+IMPORTANT: You have an active todo list for this chat session. This means:
+1. A todo list has been created for this conversation
+2. You should regularly call the manage_todos tool to review and update the todo list
+3. Before proceeding with new tasks, ensure the todo list reflects current progress
+4. Use the manage_todos tool to update task statuses and add new tasks as needed
+5. This ensures proper task management and continuity across the conversation
+
+When you need to update the todo list, call the manage_todos tool with a query like:
+"Review and update the current todo list based on recent progress. Mark completed tasks as done and add any new tasks that have emerged."
+"""
+            system_prompt += todo_context
+        
         # Add explicit JSON enforcement
         system_prompt += "\n\nCRITICAL: You MUST always return ONLY valid JSON in the exact schema format. NO additional text, explanations, or prose. Just the JSON object."
             
@@ -215,7 +238,7 @@ async def social_media_manager(
         if session_context:
             await session_context.send_nano("social_media_manager", "thinking…")
         
-        raw = await _call_openai_chatmodel(system_prompt, user_text, model_name)
+        raw = await chat_model_router(system_prompt, user_text, final_chat_llm_model, final_model_name)
         # If the chat model itself returned an awaitable for some reason, ensure resolution
         raw = await _maybe_await(raw)
         
@@ -250,67 +273,409 @@ async def social_media_manager(
 
     iteration = 0
     last_text = ""
+    self_response = ""  # Initialize self_response to avoid UnboundLocalError
 
-    while True:
-        # Check if we need to call another agent
-        needs_agent = bool(social_media_management.get("agent_required", False))
-        
-        # Check if we need a tool
-        needs_tool = bool(social_media_management.get("tool_required", False))
-        
-        print(f"=== SOCIAL_MEDIA_MANAGER: Loop iteration {iteration}, needs_agent: {needs_agent}, needs_tool: {needs_tool} ===")
-        print(f"=== SOCIAL_MEDIA_MANAGER: social_media_management: {social_media_management} ===")
+    try:
+        while True:
+            # Check if we need to call another agent
+            needs_agent = bool(social_media_management.get("agent_required", False))
+            
+            # Check if we need a tool
+            needs_tool = bool(social_media_management.get("tool_required", False))
+            
+            print(f"=== SOCIAL_MEDIA_MANAGER: Loop iteration {iteration}, needs_agent: {needs_agent}, needs_tool: {needs_tool} ===")
+            print(f"=== SOCIAL_MEDIA_MANAGER: social_media_management: {social_media_management} ===")
 
-        # Validation: Only one can be true at a time
-        if needs_agent and needs_tool:
-            error_response = {
-                "agent_required": False,
-                "self_response": "Invalid social media management state: Both agent_required and tool_required cannot be true simultaneously",
-                "error": True
-            }
-            if session_context:
-                await session_context.send_nano("social_media_manager", "Error: Both agent and tool requirements detected")
-            await websocket.send_json({"text": error_response["self_response"]})
-            return error_response
+            # Validation: Only one can be true at a time
+            if needs_agent and needs_tool:
+                error_response = {
+                    "agent_required": False,
+                    "self_response": "Invalid social media management state: Both agent_required and tool_required cannot be true simultaneously",
+                    "error": True
+                }
+                if session_context:
+                    await session_context.send_nano("social_media_manager", "Error: Both agent and tool requirements detected")
+                await websocket.send_json({"text": error_response["self_response"]})
+                return error_response
 
-        if not needs_agent and not needs_tool:
-            # No agent or tool required - return the response
-            self_response = social_media_management.get("self_response", social_media_management.get("text", ""))
-            if not isinstance(self_response, str):
-                self_response = str(self_response)
+            if not needs_agent and not needs_tool:
+                # No agent or tool required - return the response
+                self_response = social_media_management.get("self_response", social_media_management.get("text", ""))
+                if not isinstance(self_response, str):
+                    self_response = str(self_response)
 
-            # If the final response matches the last agent message we sent, avoid duplicating it
-            try:
-                if self_response.strip() == (last_text or "").strip():
-                    if debug:
-                        await websocket.send_json({"debug": {"note": "suppressing duplicate final response"}})
-                    return {"agent_required": False, "self_response": self_response}
-            except Exception:
-                pass
+                # If the final response matches the last agent message we sent, avoid duplicating it
+                try:
+                    if self_response.strip() == (last_text or "").strip():
+                        if debug:
+                            await websocket.send_json({"debug": {"note": "suppressing duplicate final response"}})
+                        return {"agent_required": False, "self_response": self_response}
+                except Exception:
+                    pass
 
-            # Nano: answer ready
-            if session_context:
-                await session_context.send_nano("social_media_manager", "answer ready")
+                # Nano: answer ready
+                if session_context:
+                    await session_context.send_nano("social_media_manager", "answer ready")
 
-            if session_context:
-                await session_context.append_and_persist_memory(
-                    "social_media_manager",
-                    f"Social Media Manager response: {self_response}",
-                    {"response_type": "direct", "timestamp": message.get("timestamp")}
-                )
-                if session_context.chat_id:
-                    await save_chat_message(
-                        chat_id=session_context.chat_id,
-                        role="assistant",
-                        content=self_response,
-                        agent="social_media_manager",
-                        message_type="final_message"
+                if session_context:
+                    await session_context.append_and_persist_memory(
+                        "social_media_manager",
+                        f"Social Media Manager response: {self_response}",
+                        {"response_type": "direct", "timestamp": message.get("timestamp")}
+                    )
+                    if session_context.chat_id:
+                        await save_chat_message(
+                            chat_id=session_context.chat_id,
+                            role="assistant",
+                            content=self_response,
+                            agent="social_media_manager",
+                            message_type="final_message"
+                        )
+
+                await websocket.send_json({"text": self_response, "agent_name": "social_media_manager"})
+                print(f"[social_media_manager-response] {self_response}")
+
+                return {"agent_required": False, "self_response": self_response}
+
+            # Handle agent orchestration
+            if needs_agent:
+                agent_name = social_media_management.get("agent_name", "").strip()
+                agent_query = social_media_management.get("agent_query", "").strip()
+
+                if not agent_name or not agent_query:
+                    error_response = {
+                        "agent_required": False,
+                        "self_response": "Agent orchestration requested but missing agent_name or agent_query",
+                        "error": True
+                    }
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", "Error: Missing agent_name or agent_query")
+                    await websocket.send_json({"text": error_response["self_response"]})
+                    return error_response
+
+                # Validate agent name
+                valid_agents = ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "media_activist", "copy_writer", "todo_planner")
+                if agent_name not in valid_agents:
+                    error_response = {
+                        "agent_required": False,
+                        "self_response": f"Unknown agent requested: '{agent_name}'. Valid agents: {', '.join(valid_agents)}",
+                        "error": True
+                    }
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", f"Unknown agent: {agent_name}")
+                    await websocket.send_json({"text": error_response["self_response"]})
+                    return error_response
+
+                # Log agent call
+                if session_context:
+                    await session_context.send_nano("social_media_manager", f"routing → {agent_name}")
+                    await session_context.append_and_persist_memory(
+                        "social_media_manager",
+                        f"Agent call decision: {agent_name} with query: {agent_query}",
+                        {"phase": "agent_call", "agent_name": agent_name, "query": agent_query}
                     )
 
-            await websocket.send_json({"text": self_response, "agent_name": "social_media_manager"})
-            print(f"[social_media_manager-response] {self_response}")
+                await websocket.send_json({
+                    "text": f"Routing to {agent_name}...",
+                    "agent_required": True,
+                    "agent_name": agent_name,
+                    "agent_query": agent_query
+                })
 
-            return {"agent_required": False, "self_response": self_response}
+                try:
+                    print(f"=== SOCIAL_MEDIA_MANAGER: Calling agent {agent_name} with query: {agent_query} ===")
+                    result = await call_agent(agent_name, agent_query, model_name, "openai", registry_path, session_context, user_metadata, user_image_path)
+                    print("=== SOCIAL_MEDIA_MANAGER: agent_result ===")
+                    print(result)
+                    print("=== SOCIAL_MEDIA_MANAGER: end agent_result ===")
+                except Exception as agent_error:
+                    print(f"=== SOCIAL_MEDIA_MANAGER: agent_error ===")
+                    print(agent_error)
+                    print("=== SOCIAL_MEDIA_MANAGER: end agent_error ===")
+
+                    error_response = {
+                        "agent_required": False,
+                        "self_response": f"Error calling agent {agent_name}: {str(agent_error)}",
+                        "error": True
+                    }
+                    
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", f"Error calling agent {agent_name}")
+                    await websocket.send_json({"text": error_response["self_response"]})
+                    return error_response
+
+                # Log successful agent call
+                if session_context:
+                    await session_context.send_nano("social_media_manager", f"agent ✓ {agent_name}")
+                    await session_context.append_and_persist_memory(
+                        "social_media_manager",
+                        f"Agent {agent_name} result: {str(result)[:300]}...",
+                        {"phase": "agent_result", "agent_name": agent_name, "success": True, "result_type": "agent_output"}
+                    )
+                    if session_context.chat_id:
+                        await save_chat_message(
+                            chat_id=session_context.chat_id,
+                            role="agent",
+                            content=str(result),
+                            agent="social_media_manager"
+                        )
+
+                try:
+                    agent_text = result.get("text", "") if isinstance(result, dict) else str(result)
+                    last_text = agent_text or last_text
+                    if agent_text:
+                        print(f"[agent-response:{agent_name}] {agent_text}")
+                    
+                    # Check if the agent returned todo data and forward it to frontend
+                    if isinstance(result, dict) and result.get("metadata", {}).get("message_type") == "todo_created":
+                        todo_data = result.get("metadata", {}).get("todo_data")
+                        if todo_data:
+                            # Set todo_planner_state to True after creating todo list
+                            if session_context:
+                                session_context.set_todo_planner_state(True)
+                                await session_context.send_nano("social_media_manager", "Todo list created - todo planner state activated")
+                            
+                            await websocket.send_json({
+                                "text": agent_text,
+                                "agent_name": agent_name,
+                                "metadata": result.get("metadata")
+                            })
+                            print(f"[agent-response:{agent_name}] Forwarded todo data to frontend")
+                except Exception:
+                    pass
+
+                # Prepare follow-up query for next iteration
+                todo_planner_instruction = ""
+                if session_context and session_context.get_todo_planner_state():
+                    todo_planner_instruction = """
+                
+                IMPORTANT: You have an active todo list for this chat. Before proceeding with the next task step, you MUST:
+                1. Call the todo_planner agent to review and update the current todo list
+                2. Ensure the todo list reflects the current progress and next steps
+                3. Update task statuses based on completed work
+                4. This ensures continuity and proper task management across the conversation
+                """
+                
+                follow_up_query = f"""
+                Original user message: {user_text}
+
+                Agent used: {agent_name}
+                Agent query: {agent_query}
+                Agent result: {json.dumps(result, indent=2)}{todo_planner_instruction}
+
+                CRITICAL INSTRUCTION: The agent has completed its task successfully. You MUST now:
+                1. Set agent_required to FALSE
+                2. You may need to call another agent or use tools based on the agent's response
+                3. Update your planner step statuses to reflect the agent's data
+                4. Continue with the social media management process if sufficient information is gathered
+                5. Provide comprehensive final response incorporating the agent's data
+                6. NEVER set both agent_required and tool_required to true simultaneously
+                
+                CRITICAL: You MUST return ONLY the JSON object in the exact schema format. NO additional text, explanations, or prose. Just the JSON:
+                {{
+                  "agent_required": false,
+                  "self_response": "your comprehensive response incorporating the agent's data",
+                  "tool_required": false,
+                  "planner": {{
+                    "plan_steps": [...],
+                    "summary": "updated plan summary"
+                  }}
+                }}
+                """
+
+                # Update social_media_management for next iteration
+                try:
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", "thinking…")
+                    
+                    raw = await chat_model_router(system_prompt, follow_up_query, final_chat_llm_model, final_model_name)
+                    raw = await _maybe_await(raw)
+                    
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", "parsed response")
+                        
+                except Exception as e:
+                    error_msg = f"Error calling model for follow-up: {e}"
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", "Error calling model for follow-up")
+                    
+                    fallback = {
+                        "agent_required": False,
+                        "self_response": f"Agent {agent_name} completed successfully, but follow-up processing failed: {error_msg}",
+                    }
+                    await websocket.send_json({"text": fallback["self_response"]})
+                    return fallback
+
+                # Update social_media_management with new response
+                social_media_management = _normalize_social_media_management(raw)
+                iteration += 1
+                continue  # Continue to next iteration with updated social_media_management
+
+            # Handle tool calling
+            elif needs_tool:
+                tool_name = social_media_management.get("tool_name")
+                input_schema_fields = social_media_management.get("input_schema_fields", {})
+
+                # Normalize input_schema_fields if list of objects was provided
+                if isinstance(input_schema_fields, list):
+                    merged = {}
+                    for item in input_schema_fields:
+                        if isinstance(item, dict):
+                            merged.update(item)
+                    input_schema_fields = merged
+
+                # For tools, ALWAYS override user_id with actual value from session context
+                user_id = getattr(session_context, 'user_id', None) if session_context else None
+                if user_id and isinstance(input_schema_fields, dict):
+                    input_schema_fields["user_id"] = user_id
+                    print(f"🔧 Overriding user_id with actual value: {user_id}")
+                
+                # For todo tools, ALWAYS override chat_id with actual value from session context
+                if tool_name in ["manage_todos", "create_todo_list", "update_todo_task_status", "get_next_todo_task", "add_todo_task", "get_chat_todos"]:
+                    chat_id = getattr(session_context, 'chat_id', None) if session_context else None
+                    
+                    if chat_id and isinstance(input_schema_fields, dict):
+                        input_schema_fields["chat_id"] = chat_id
+                        print(f"🔧 Overriding chat_id with actual value: {chat_id}")
+                    elif not chat_id:
+                        print(f"⚠️ WARNING: No chat_id available in session_context for tool {tool_name}")
+                        # Use a fallback chat_id to prevent errors
+                        if isinstance(input_schema_fields, dict):
+                            fallback_chat_id = f"fallback_{session_context.session_id if session_context else 'unknown'}"
+                            input_schema_fields["chat_id"] = fallback_chat_id
+                            print(f"🔧 Using fallback chat_id: {fallback_chat_id}")
+                    
+                    # Add agent name for todo tools
+                    if isinstance(input_schema_fields, dict) and "agent_name" not in input_schema_fields:
+                        input_schema_fields["agent_name"] = "social_media_manager"
+
+                # Log tool call
+                if session_context:
+                    await session_context.send_nano("social_media_manager", f"tool → {tool_name}")
+                    await session_context.append_and_persist_memory(
+                        "social_media_manager",
+                        f"Tool call decision: {tool_name} with parameters: {input_schema_fields}",
+                        {"phase": "tool_call", "tool_name": tool_name, "parameters": input_schema_fields}
+                    )
+
+                # Call the tool using tool_router
+                try:
+                    print(f"=== SOCIAL_MEDIA_MANAGER: Calling tool {tool_name} with params: {input_schema_fields} ===")
+                    tool_result = await tool_router(tool_name, input_schema_fields)
+                    print("=== SOCIAL_MEDIA_MANAGER: tool_result ===")
+                    print(tool_result)
+                    print("=== SOCIAL_MEDIA_MANAGER: end tool_result ===")
+                except Exception as tool_error:
+                    print(f"=== SOCIAL_MEDIA_MANAGER: tool_error ===")
+                    print(tool_error)
+                    print("=== SOCIAL_MEDIA_MANAGER: end tool_error ===")
+
+                    error_response = {
+                        "agent_required": False,
+                        "self_response": f"Error executing tool {tool_name}: {str(tool_error)}",
+                        "error": True
+                    }
+                    
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", f"Error executing tool {tool_name}")
+                    await websocket.send_json({"text": error_response["self_response"]})
+                    return error_response
+
+                # Check if tool returned an error
+                if isinstance(tool_result, dict) and tool_result.get("success") is False:
+                    error_response = {
+                        "agent_required": False,
+                        "self_response": f"Tool {tool_name} returned an error: {tool_result.get('error', 'Unknown error')}",
+                        "error": True
+                    }
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", f"Tool {tool_name} returned error")
+                    await websocket.send_json({"text": error_response["self_response"]})
+                    return error_response
+
+                # Log successful tool call
+                if session_context:
+                    await session_context.send_nano("social_media_manager", f"tool ✓ {tool_name}")
+                    await session_context.append_and_persist_memory(
+                        "social_media_manager",
+                        f"Tool {tool_name} result: {str(tool_result)[:300]}...",
+                        {"phase": "tool_result", "tool_name": tool_name, "success": True, "result_type": "tool_output"}
+                    )
+                    if session_context.chat_id:
+                        await save_chat_message(
+                            chat_id=session_context.chat_id,
+                            role="tool",
+                            content=str(tool_result),
+                            agent="social_media_manager"
+                        )
+                
+                # Send WebSocket message with todo data if it's a todo creation
+                if tool_name == "manage_todos" and isinstance(tool_result, dict) and tool_result.get("success"):
+                    todo_data = tool_result.get("todo_data")
+                    if todo_data:
+                        await websocket.send_json({
+                            "text": f"Created todo list: {todo_data.get('title', 'Untitled')}",
+                            "agent_name": "social_media_manager",
+                            "metadata": {
+                                "todo_data": todo_data,
+                                "message_type": "todo_created"
+                            }
+                        })
+
+                # Prepare follow-up query for next iteration
+                follow_up_query = f"""
+                Original user message: {user_text}
+
+                Tool used: {tool_name}
+                Tool result: {json.dumps(tool_result, indent=2)}
+
+                CRITICAL INSTRUCTION: The tool has been executed successfully and contains the result. You MUST now:
+                1. Set tool_required to FALSE
+                2. You may need to call another agent or additional tools based on the tool's response
+                3. Update your planner step statuses
+                4. Continue with social media management process incorporating the tool's data
+                5. Provide comprehensive final response
+                6. NEVER set both agent_required and tool_required to true simultaneously
+                
+                CRITICAL: You MUST return ONLY the JSON object in the exact schema format. NO additional text, explanations, or prose. Just the JSON:
+                {{
+                  "agent_required": false,
+                  "self_response": "your comprehensive response incorporating the tool's data",
+                  "tool_required": false,
+                  "planner": {{
+                    "plan_steps": [...],
+                    "summary": "updated plan summary"
+                  }}
+                }}
+                """
+
+                # Update social_media_management for next iteration
+                try:
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", "thinking…")
+                    
+                    raw = await chat_model_router(system_prompt, follow_up_query, final_chat_llm_model, final_model_name)
+                    raw = await _maybe_await(raw)
+                    
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", "parsed response")
+                        
+                except Exception as e:
+                    error_msg = f"Error calling model for follow-up: {e}"
+                    if session_context:
+                        await session_context.send_nano("social_media_manager", "Error calling model for follow-up")
+                    
+                    fallback = {
+                        "agent_required": False,
+                        "self_response": f"Tool {tool_name} completed successfully, but follow-up processing failed: {error_msg}",
+                    }
+                    await websocket.send_json({"text": fallback["self_response"]})
+                    return fallback
+
+                # Update social_media_management with new response
+                social_media_management = _normalize_social_media_management(raw)
+                iteration += 1
+                continue  # Continue to next iteration with updated social_media_management
 
         # Guard against infinite loops
         if iteration >= max_iterations:
@@ -322,402 +687,12 @@ async def social_media_manager(
             await websocket.send_json({"text": fallback_text})
             return {"agent_required": False, "self_response": fallback_text}
 
-        # Handle agent orchestration
-        if needs_agent:
-            agent_name = social_media_management.get("agent_name", "").strip()
-            agent_query = social_media_management.get("agent_query", "").strip()
-
-            if not agent_name or not agent_query:
-                error_response = {
-                    "agent_required": False,
-                    "self_response": "Agent orchestration requested but missing agent_name or agent_query",
-                    "error": True
-                }
-                if session_context:
-                    await session_context.send_nano("social_media_manager", "Error: Missing agent_name or agent_query")
-                await websocket.send_json({"text": error_response["self_response"]})
-                return error_response
-
-            # Validate agent name
-            valid_agents = ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "media_activist", "copy_writer", "todo_planner")
-            if agent_name not in valid_agents:
-                error_response = {
-                    "agent_required": False,
-                    "self_response": f"Unknown agent requested: '{agent_name}'. Valid agents: {', '.join(valid_agents)}",
-                    "error": True
-                }
-                if session_context:
-                    await session_context.send_nano("social_media_manager", f"Unknown agent: {agent_name}")
-                await websocket.send_json({"text": error_response["self_response"]})
-                return error_response
-
-            # Log agent call
-            if session_context:
-                await session_context.send_nano("social_media_manager", f"routing → {agent_name}")
-                await session_context.append_and_persist_memory(
-                    "social_media_manager",
-                    f"Agent call decision: {agent_name} with query: {agent_query}",
-                    {"phase": "agent_call", "agent_name": agent_name, "query": agent_query}
-                )
-
-            await websocket.send_json({
-                "text": f"Routing to {agent_name}...",
-                "agent_required": True,
-                "agent_name": agent_name,
-                "agent_query": agent_query
-            })
-
-            try:
-                print(f"=== SOCIAL_MEDIA_MANAGER: Calling agent {agent_name} with query: {agent_query} ===")
-                result = await call_agent(agent_name, agent_query, model_name, registry_path, session_context, user_metadata, user_image_path)
-                print("=== SOCIAL_MEDIA_MANAGER: agent_result ===")
-                print(result)
-                print("=== SOCIAL_MEDIA_MANAGER: end agent_result ===")
-            except Exception as agent_error:
-                # Use verification tool to diagnose the agent error
-                try:
-                    from tools.verification_tool import diagnose_agent_error
-                    diagnosis = await diagnose_agent_error(
-                        agent_name=agent_name,
-                        error_message=str(agent_error),
-                        agent_query=agent_query,
-                        agent_output=None
-                    )
-                    
-                    # Log diagnosis for debugging
-                    if session_context:
-                        await session_context.send_nano("social_media_manager", f"Verification tool diagnosis: {diagnosis.get('analysis', 'No analysis available')}")
-                    
-                    # Check if we should route to a different agent
-                    solutions = diagnosis.get('solutions', [])
-                    route_solution = next((s for s in solutions if s.get('action') == 'route_to_agent'), None)
-                    
-                    if route_solution and route_solution.get('patch'):
-                        # Try routing to the recommended agent
-                        try:
-                            recommended_agent = route_solution['patch'].get('agent_name')
-                            if recommended_agent and recommended_agent != agent_name:
-                                if session_context:
-                                    await session_context.send_nano("social_media_manager", f"Re-routing to {recommended_agent} based on verification tool recommendation")
-                                
-                                # Retry with the recommended agent
-                                result = await call_agent(recommended_agent, agent_query, model_name, registry_path, session_context, user_metadata, user_image_path)
-                                
-                                # Success after re-routing, continue with normal flow
-                                if session_context:
-                                    await session_context.send_nano("social_media_manager", f"Agent {recommended_agent} succeeded after re-routing")
-                                # Continue with normal agent result processing
-                            else:
-                                raise Exception("No valid agent recommendation")
-                        except Exception as retry_error:
-                            # Re-routing failed, fall through to error handling
-                            pass
-                    
-                    # If no re-routing or re-routing failed, provide detailed error response
-                    error_response = {
-                        "agent_required": False,
-                        "self_response": f"Agent {agent_name} failed: {diagnosis.get('analysis', str(agent_error))}. Recommended actions: {', '.join([s.get('action', 'unknown') for s in solutions])}",
-                        "error": True,
-                        "verification_diagnosis": diagnosis
-                    }
-                    
-                except Exception as verification_error:
-                    # Verification tool itself failed, use basic error response
-                    error_response = {
-                        "agent_required": False,
-                        "self_response": f"Error calling agent {agent_name}: {str(agent_error)}",
-                        "error": True
-                    }
-                
-                if session_context:
-                    await session_context.send_nano("social_media_manager", f"Error calling agent {agent_name}")
-                await websocket.send_json({"text": error_response["self_response"]})
-                return error_response
-
-            # Log successful agent call
-            if session_context:
-                await session_context.send_nano("social_media_manager", f"agent ✓ {agent_name}")
-                await session_context.append_and_persist_memory(
-                    "social_media_manager",
-                    f"Agent {agent_name} result: {str(result)[:300]}...",
-                    {"phase": "agent_result", "agent_name": agent_name, "success": True, "result_type": "agent_output"}
-                )
-                if session_context.chat_id:
-                    await save_chat_message(
-                        chat_id=session_context.chat_id,
-                        role="agent",
-                        content=str(result),
-                        agent="social_media_manager"
-                    )
-
-            try:
-                agent_text = result.get("text", "") if isinstance(result, dict) else str(result)
-                last_text = agent_text or last_text
-                if agent_text:
-                    print(f"[agent-response:{agent_name}] {agent_text}")
-                
-                # Check if the agent returned todo data and forward it to frontend
-                if isinstance(result, dict) and result.get("metadata", {}).get("message_type") == "todo_created":
-                    todo_data = result.get("metadata", {}).get("todo_data")
-                    if todo_data:
-                        await websocket.send_json({
-                            "text": agent_text,
-                            "agent_name": agent_name,
-                            "metadata": result.get("metadata")
-                        })
-                        print(f"[agent-response:{agent_name}] Forwarded todo data to frontend")
-            except Exception:
-                pass
-
-            # Prepare follow-up query for next iteration
-            follow_up_query = f"""
-            Original user message: {user_text}
-
-            Agent used: {agent_name}
-            Agent query: {agent_query}
-            Agent result: {json.dumps(result, indent=2)}
-
-            CRITICAL INSTRUCTION: The agent has completed its task successfully. You MUST now:
-            1. Set agent_required to FALSE
-            2. You may need to call another agent or use tools based on the agent's response
-            3. Update your planner step statuses to reflect the agent's data
-            4. Continue with the social media management process if sufficient information is gathered
-            5. Provide comprehensive final response incorporating the agent's data
-            6. NEVER set both agent_required and tool_required to true simultaneously
-            
-            CRITICAL: You MUST return ONLY the JSON object in the exact schema format. NO additional text, explanations, or prose. Just the JSON:
-            {{
-              "agent_required": false,
-              "self_response": "your comprehensive response incorporating the agent's data",
-              "tool_required": false,
-              "planner": {{
-                "plan_steps": [...],
-                "summary": "updated plan summary"
-              }}
-            }}
-            """
-
-        # Handle tool calling
-        elif needs_tool:
-            tool_name = social_media_management.get("tool_name")
-            input_schema_fields = social_media_management.get("input_schema_fields", {})
-
-            # Normalize input_schema_fields if list of objects was provided
-            if isinstance(input_schema_fields, list):
-                merged = {}
-                for item in input_schema_fields:
-                    if isinstance(item, dict):
-                        merged.update(item)
-                input_schema_fields = merged
-
-            # For tools, ALWAYS override user_id with actual value from session context
-            user_id = getattr(session_context, 'user_id', None) if session_context else None
-            if user_id and isinstance(input_schema_fields, dict):
-                input_schema_fields["user_id"] = user_id
-                print(f"🔧 Overriding user_id with actual value: {user_id}")
-            
-            # For todo tools, ALWAYS override chat_id with actual value from session context
-            if tool_name in ["manage_todos", "create_todo_list", "update_todo_task_status", "get_next_todo_task", "add_todo_task", "get_chat_todos"]:
-                chat_id = getattr(session_context, 'chat_id', None) if session_context else None
-                
-                if chat_id and isinstance(input_schema_fields, dict):
-                    input_schema_fields["chat_id"] = chat_id
-                    print(f"🔧 Overriding chat_id with actual value: {chat_id}")
-                elif not chat_id:
-                    print(f"⚠️ WARNING: No chat_id available in session_context for tool {tool_name}")
-                    # Use a fallback chat_id to prevent errors
-                    if isinstance(input_schema_fields, dict):
-                        fallback_chat_id = f"fallback_{session_context.session_id if session_context else 'unknown'}"
-                        input_schema_fields["chat_id"] = fallback_chat_id
-                        print(f"🔧 Using fallback chat_id: {fallback_chat_id}")
-                
-                # Add agent name for todo tools
-                if isinstance(input_schema_fields, dict) and "agent_name" not in input_schema_fields:
-                    input_schema_fields["agent_name"] = "social_media_manager"
-
-            # Log tool call
-            if session_context:
-                await session_context.send_nano("social_media_manager", f"tool → {tool_name}")
-                await session_context.append_and_persist_memory(
-                    "social_media_manager",
-                    f"Tool call decision: {tool_name} with parameters: {input_schema_fields}",
-                    {"phase": "tool_call", "tool_name": tool_name, "parameters": input_schema_fields}
-                )
-
-            # Call the tool using tool_router
-            try:
-                print(f"=== SOCIAL_MEDIA_MANAGER: Calling tool {tool_name} with params: {input_schema_fields} ===")
-                tool_result = await tool_router(tool_name, input_schema_fields)
-                print("=== SOCIAL_MEDIA_MANAGER: tool_result ===")
-                print(tool_result)
-                print("=== SOCIAL_MEDIA_MANAGER: end tool_result ===")
-            except Exception as tool_error:
-                # Use verification tool to diagnose the error
-                try:
-                    from tools.verification_tool import diagnose_tool_error
-                    diagnosis = await diagnose_tool_error(
-                        tool_name=tool_name,
-                        tool_call_payload=input_schema_fields,
-                        tool_response={"error": str(tool_error)},
-                        error_details=str(tool_error)
-                    )
-                    
-                    # Log diagnosis for debugging
-                    if session_context:
-                        await session_context.send_nano("social_media_manager", f"Verification tool diagnosis: {diagnosis.get('analysis', 'No analysis available')}")
-                    
-                    # Check if we can auto-fix and retry
-                    solutions = diagnosis.get('solutions', [])
-                    auto_fix_solution = next((s for s in solutions if s.get('action') == 'auto_fix_and_retry'), None)
-                    
-                    if auto_fix_solution and auto_fix_solution.get('patch'):
-                        # Apply the patch and retry
-                        try:
-                            patch = auto_fix_solution['patch']
-                            if isinstance(patch, dict):
-                                input_schema_fields.update(patch)
-                            elif isinstance(patch, str):
-                                # Try to parse as JSON patch
-                                patch_data = json.loads(patch)
-                                input_schema_fields.update(patch_data)
-                            
-                            # Retry the tool call
-                            tool_result = await tool_router(tool_name, input_schema_fields)
-                            if isinstance(tool_result, dict) and tool_result.get("success") is not False:
-                                # Success after auto-fix, continue with normal flow
-                                if session_context:
-                                    await session_context.send_nano("social_media_manager", f"Tool {tool_name} succeeded after auto-fix")
-                                # Continue with normal tool result processing
-                            else:
-                                raise Exception("Auto-fix failed")
-                        except Exception as retry_error:
-                            # Auto-fix failed, fall through to error handling
-                            pass
-                    
-                    # If no auto-fix or auto-fix failed, provide detailed error response
-                    error_response = {
-                        "agent_required": False,
-                        "self_response": f"Tool {tool_name} failed: {diagnosis.get('analysis', str(tool_error))}. Recommended actions: {', '.join([s.get('action', 'unknown') for s in solutions])}",
-                        "error": True,
-                        "verification_diagnosis": diagnosis
-                    }
-                    
-                except Exception as verification_error:
-                    # Verification tool itself failed, use basic error response
-                    error_response = {
-                        "agent_required": False,
-                        "self_response": f"Error executing tool {tool_name}: {str(tool_error)}",
-                        "error": True
-                    }
-                
-                if session_context:
-                    await session_context.send_nano("social_media_manager", f"Error executing tool {tool_name}")
-                await websocket.send_json({"text": error_response["self_response"]})
-                return error_response
-
-            # Check if tool returned an error
-            if isinstance(tool_result, dict) and tool_result.get("success") is False:
-                error_response = {
-                    "agent_required": False,
-                    "self_response": f"Tool {tool_name} returned an error: {tool_result.get('error', 'Unknown error')}",
-                    "error": True
-                }
-                if session_context:
-                    await session_context.send_nano("social_media_manager", f"Tool {tool_name} returned error")
-                await websocket.send_json({"text": error_response["self_response"]})
-                return error_response
-
-            # Log successful tool call
-            if session_context:
-                await session_context.send_nano("social_media_manager", f"tool ✓ {tool_name}")
-                await session_context.append_and_persist_memory(
-                    "social_media_manager",
-                    f"Tool {tool_name} result: {str(tool_result)[:300]}...",
-                    {"phase": "tool_result", "tool_name": tool_name, "success": True, "result_type": "tool_output"}
-                )
-                if session_context.chat_id:
-                    await save_chat_message(
-                        chat_id=session_context.chat_id,
-                        role="tool",
-                        content=str(tool_result),
-                        agent="social_media_manager"
-                    )
-            
-            # Send WebSocket message with todo data if it's a todo creation
-            if tool_name == "manage_todos" and isinstance(tool_result, dict) and tool_result.get("success"):
-                todo_data = tool_result.get("todo_data")
-                if todo_data:
-                    await websocket.send_json({
-                        "text": f"Created todo list: {todo_data.get('title', 'Untitled')}",
-                        "agent_name": "social_media_manager",
-                        "metadata": {
-                            "todo_data": todo_data,
-                            "message_type": "todo_created"
-                        }
-                    })
-
-            # Prepare follow-up query for next iteration
-            follow_up_query = f"""
-            Original user message: {user_text}
-
-            Tool used: {tool_name}
-            Tool result: {json.dumps(tool_result, indent=2)}
-
-            CRITICAL INSTRUCTION: The tool has been executed successfully and contains the result. You MUST now:
-            1. Set tool_required to FALSE
-            2. You may need to call another agent or additional tools based on the tool's response
-            3. Update your planner step statuses
-            4. Continue with social media management process incorporating the tool's data
-            5. Provide comprehensive final response
-            6. NEVER set both agent_required and tool_required to true simultaneously
-            
-            CRITICAL: You MUST return ONLY the JSON object in the exact schema format. NO additional text, explanations, or prose. Just the JSON:
-            {{
-              "agent_required": false,
-              "self_response": "your comprehensive response incorporating the tool's data",
-              "tool_required": false,
-              "planner": {{
-                "plan_steps": [...],
-                "summary": "updated plan summary"
-              }}
-            }}
-            """
-
-        print(f"=== SOCIAL_MEDIA_MANAGER: Follow-up query: {follow_up_query[:200]}... ===")
-
+    except Exception as e:
+        print(f"❌ SOCIAL_MEDIA_MANAGER ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        
         if session_context:
-            await session_context.send_nano("social_media_manager", "Processing result")
-            await session_context.append_and_persist_memory(
-                "social_media_manager",
-                f"Follow-up model call: Processing results for next step",
-                {"phase": "follow_up", "query": user_text[:100]}
-            )
-
-        print(f"=== SOCIAL_MEDIA_MANAGER: Calling follow-up model ===")
-        try:
-            raw = await _call_openai_chatmodel(system_prompt, follow_up_query, model_name)
-            print(f"=== SOCIAL_MEDIA_MANAGER: Raw model response: {raw} ===")
-        except Exception as model_error:
-            print(f"=== SOCIAL_MEDIA_MANAGER: MODEL CALL ERROR: {model_error} ===")
-            raise model_error
-            
-        try:
-            raw = await _maybe_await(raw)
-            social_media_management = _normalize_social_media_management(raw)
-            print(f"=== SOCIAL_MEDIA_MANAGER: Normalized social_media_management: {social_media_management} ===")
-        except Exception as normalize_error:
-            print(f"=== SOCIAL_MEDIA_MANAGER: NORMALIZE ERROR: {normalize_error} ===")
-            raise normalize_error
-
-        if session_context:
-            await session_context.append_and_persist_memory(
-                "social_media_manager",
-                f"Follow-up model response: {str(social_media_management)[:200]}...",
-                {"phase": "follow_up", "response_type": "model_iteration"}
-            )
-
-        print("=== Iteration social media manager response ===")
-        print(social_media_management)
-        print("=== End iteration response ===")
-
-        iteration += 1
+            await session_context.send_nano("social_media_manager", f"Error: {str(e)}")
+        
+        return {"text": f"Error in social media manager: {str(e)}", "error": True}

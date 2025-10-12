@@ -164,6 +164,9 @@ class SessionContext:
         # Session metadata - NOT persisted to MongoDB
         self.metadata: Dict[str, Any] = {}
         
+        # Todo planner state - tracks if todo list exists for this chat
+        self.todo_planner_state: bool = False
+        
         # WebSocket reference (set by SessionManager)
         self.websocket: Optional[Any] = None
         
@@ -410,6 +413,36 @@ class SessionContext:
             logger.error(f"Failed to persist memories for chat {self.chat_id}: {e}")
             raise
     
+    def set_todo_planner_state(self, state: bool) -> None:
+        """Set the todo planner state for this session"""
+        self.todo_planner_state = state
+    
+    def get_todo_planner_state(self) -> bool:
+        """Get the current todo planner state"""
+        return self.todo_planner_state
+    
+    async def check_recent_todo_list(self, chat_id: str) -> Optional[Dict[str, Any]]:
+        """Check for recent active todo list in the chat"""
+        try:
+            # Import here to avoid circular imports
+            from utils.mongo_store import get_chat_messages
+            
+            # Get recent messages to find todo creation
+            recent_messages = await get_chat_messages(chat_id, limit=50)
+            
+            # Look for todo_created messages
+            for message in recent_messages:
+                if (message.get("message_type") == "todo_created" and 
+                    message.get("meta", {}).get("action") == "create"):
+                    todo_data = message.get("meta", {}).get("todo_data")
+                    if todo_data and todo_data.get("status") == "active":
+                        return todo_data
+            
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to check recent todo list: {e}")
+            return None
+
     async def append_and_persist_memory(self, agent_name: str, content: str, 
                                       meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Add memory entry and immediately persist to database"""
@@ -465,7 +498,8 @@ class SessionContext:
             "last_active": self.last_active.isoformat(),
             "agent_memories": {name: memory.to_dict() for name, memory in self.agent_memories.items()},
             "logs": [log.to_dict() for log in self.log_queue],
-            "metadata": self.metadata
+            "metadata": self.metadata,
+            "todo_planner_state": self.todo_planner_state
         }
     
     @classmethod
@@ -479,6 +513,7 @@ class SessionContext:
         ctx.created_at = datetime.fromisoformat(data["created_at"])
         ctx.last_active = datetime.fromisoformat(data["last_active"])
         ctx.metadata = data.get("metadata", {})
+        ctx.todo_planner_state = data.get("todo_planner_state", False)
         
         # Restore agent memories
         for name, memory_data in data.get("agent_memories", {}).items():

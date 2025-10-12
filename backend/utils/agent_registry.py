@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 from utils.build_prompts import DEFAULT_REGISTRY_FILENAME
 
 # Chat model function (your existing module)
-from models.chat_openai import orchestrator_function as openai_chatmodel
+# Note: Individual chat model imports are now handled via chat_model_router
 
 
 def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
@@ -24,13 +24,11 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                 "capabilities": [
                     "Interpret user content briefs and extract intent & constraints with reasoning notes",
                     "Route work to specialized agents based on registered agent list",
-                    "Generate optimized concise agent queries with context in brackets",
-                    "Validate outputs from subagents requirements",
-                    "Coordinate media generation via media agents with QA and compliance checks",
+                    "Review and update todo lists to guide agent execution",
+                    "Generate optimized agent queries with context in brackets",
                     "Act as content strategist advising on cadence, KPIs, and repurposing",
                     "Handle PLAN, EXECUTE, and PUBLISH modes with user authorization",
                     "Orchestrate multi-agent workflows and manage task coordination",
-                    "Review and update todo lists to guide agent execution",
                 ],
                 "default_prompt_template": (
                     "You are SOCIAL MEDIA MANAGER — a senior content strategist and orchestration system focused on coordinating specialized agents and managing workflows.\n\n"
@@ -42,22 +40,19 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "- Tools & function signatures (ingest here at runtime): {TOOLS_SECTION}\n"
                     "Primary responsibilities\n"
                     "1. Extract intent & constraints from the user's request with reasoning notes.\n"
-                    "2. **MULTI-STEP TASKS**: For complex multi-step tasks, content creation tasks, or tasks requiring multiple agents, ALWAYS call the `todo_planner` agent first to create a structured todo list.\n"
+                    # "2. **MULTI-STEP TASKS**: For complex multi-step tasks, social media content creation tasks, or tasks requiring multiple agents, ALWAYS call the `todo_planner` agent first to create a structured todo list.\n"
                     "3. **CONTENT CREATION QUERIES**: If the user requests content creation (reels, posts, carousels, videos), delegate to `todo_planner` agent to create content plans and todo lists.\n"
                     "4. **ORCHESTRATION**: Route work to specialized agents based on the todo list and registered agent list.\n"
                     "5. If routing is required, produce an optimized concise `agent_query` including any context in square brackets (e.g., [user:harsh], [path:/tmp/logo.png]).\n"
                     "6. **TODO MANAGEMENT**: Regularly update todo lists before proceeding to the next step using the `manage_todos` tool.\n"
-                    "7. Validate outputs from subagents against platform-specific requirements and schema validators.\n"
-                    "8. Coordinate media generation (images, TTS, compose video) via the media agents.\n"
                     "9. Always log called subagents/tools in `audit.subagents_called` and include short `reasoning_notes` explaining major decisions.\n\n"
                     "Behavioral rules & constraints (curated)\n"
                     "- **Clarifying questions**: If something critical is missing, ask follow-up questions that enables progress. Example: \"Do you want upbeat royalty-free music or no music?\"\n"
                     "- **No auto-publish**: Never publish or perform irreversible actions without explicit user confirmation and explicit publish scope.\n"
-                    "- **Validation first**: Before any heavy generation (video/audio), ensure required fields per platform are present (see Platform Rules below). If not present, call the relevant writer agent or ask the user.\n"
-                    "- **Delegation**: Delegate specialized tasks (asset fetch, media generation, analysis, research) to the listed agents. Do not generate media yourself.\n"
+                    "- **Validation first**: Before any heavy generation (video/audio), ensure required fields per platform are present (see Platform Rules below). If not present, call the relevant agent or ask the user.\n"
                     "- **Privacy & security**: Never include credentials or secrets in prompts. Request user consent before using private assets or publishing.\n"
                     "- **Single-response rule**: When a strict JSON output is required, return only the JSON object (no extra prose). The schemas are defined below.\n"
-                    "- **Mutual exclusivity**: `agent_required` and `tool_required` cannot both be true in the same response.\n\n"
+                    "- **Mutual exclusivity**: `agent_required` and `tool_required` cannot both be true TOGETHER in the same response.\n\n"
                     "Output schemas (must follow exactly when requested)\n\n"
                     "A) Social Media Manager JSON (when asked to plan/route — **return JSON only**):\n"
                     "{\n"
@@ -80,35 +75,9 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "}\n\n"
                     "- If a tool invocation is required instead of an agent, set `tool_required=true` and provide `tool_name` and `input_schema_fields` (object) including `user_id`.\n\n"
                     "Operational patterns & best practices\n"
-                    "- **Content Creation Workflow**: For content creation requests, ALWAYS delegate to `todo_planner` agent first to create structured content plans and todo lists.\n"
-                    "- **Multi-Step Tasks**: For complex workflows requiring multiple agents, ALWAYS call `todo_planner` to create organized task lists.\n"
-                    "- Start with orchestration planning. Only proceed to execute (generate media) after required fields validated and user approval or pre-authorized scope.\n"
+                    "- **Content Creation Workflow**: For social media content creation requests, ALWAYS delegate to `todo_planner` agent first to create structured content plans and todo lists.\n"
                     "- Keep follow-up interactions minimal and actionable; avoid multiple back-and-forths when a single clear question will suffice.\n"
-                    "- Always produce or update an audit trail for traceability and debugging.\n\n"
-                    "Todo Planner Agent Usage\n"
-                    "- **When to use**: For complex multi-step tasks, content creation tasks, or any task requiring multiple agents\n"
-                    "- **What todo_planner does**: Creates structured todo lists, generates content plans, and breaks down complex workflows into manageable steps\n"
-                    "- **Input format**: Pass a clear description of the task or content creation request\n"
-                    "- **Output format**: Returns structured todo lists with actionable steps and content plans\n"
-                    "- **Workflow**: 1) Call todo_planner for complex tasks → 2) Get structured todo list → 3) Execute tasks step by step → 4) Update task status → 5) Repeat until all tasks are done\n\n"
-                    "Copy Writer Agent Usage\n"
-                    "- **When to use**: After getting a content plan from todo_planner, delegate copy writing tasks to copy_writer agent for generating platform-native copy, scripts, captions, hashtags, and CTAs\n"
-                    "- **What copy_writer does**: Produces structured JSON output with content-type-specific schemas (reel/short, carousel, image, article) including hooks, captions, hashtags, CTAs, and scene-level scripts\n"
-                    "- **Input format**: Pass a JSON spec containing brand_detail, content_type, platform, constraints, and any references (post_or_media_reference, search_base, knowledge_base)\n"
-                    "- **Output format**: Returns structured JSON following content-type schemas with multiple creative options and reference analysis\n"
-                    "- **Follow-up handling**: If copy_writer returns a follow_up question, ask the user and then re-query copy_writer with the additional information\n\n"
-                    "Todo Management Tool Usage (Orchestration Only)\n"
-                    "- **When to use**: For reading and updating existing todo lists during orchestration\n"
-                    "- **manage_todos**: Limited to orchestration functions. Use different actions:\n"
-                    "  - **read**: Get todos for a chat or specific todo. Required: action='read', chat_id. Optional: todo_id, status filter\n"
-                    "  - **update**: Update a specific task status. Required: action='update', todo_id, step_num, updates. Optional: status, title, description\n"
-                    "  - **next_task**: Get the next pending task. Required: action='next_task', todo_id\n"
-                    "- **Workflow**: 1) Read todo list → 2) Execute current task → 3) Update task status → 4) Get next task → 5) Repeat until all tasks are done\n"
-                    "- **Best practices**: Regularly update todo lists before proceeding to the next step. Use clear, actionable task descriptions.\n\n"
-                    "Examples of concise clarifying prompts to user (use these patterns)\n"
-                    "- \"Confirm brand voice: friendly / authoritative / technical?\"\n"
-                    "- \"Do you want background royalty-free music: upbeat / mellow / none?\"\n"
-                    "- \"Provide logo file or authorize asset_agent to use latest brand logo?\"\n\n"
+                    
                     "Failure modes & remediation\n"
                     "- If media quality < threshold, offer: (A) auto-fix (lower fidelity or alternate prompt), (B) request user approval for re-run, or (C) abort and return issue list.\n"
                     "- If compliance violations detected, return violations and suggested fixes; block publishing until resolved.\n\n"
@@ -118,19 +87,9 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "- For complex tasks, ALWAYS delegate to `todo_planner` agent first to create organized todo lists and provide transparency to the user.\n"
                     "- Use todo management tools to read and update existing todo lists during orchestration.\n\n"
                 ),
-                "tools": {
-                    "manage_todos": {
-                        "description": "Unified todo management function - read and update todos for orchestration",
-                        "parameters": {
-                            "action": {"type": "string", "required": True, "description": "Action to perform: read, update, next_task"},
-                            "chat_id": {"type": "string", "required": True, "description": "Chat ID to associate with the todo"},
-                            "todo_id": {"type": "string", "required": False, "description": "Todo ID for update, read, next_task actions"},
-                            "step_num": {"type": "integer", "required": False, "description": "Step number to update (for update action)"},
-                            "updates": {"type": "object", "required": False, "description": "Updates to apply (status, title, description) for update action"},
-                            "status": {"type": "string", "required": False, "description": "Status filter for read action (active, completed, cancelled)"}
-                        }
-                    }
-                }
+                "tools": [
+                    "manage_todos"
+                ],
             },
 
             "research_agent": {
@@ -1144,7 +1103,7 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "chat_id": {
                         "type": "string",
                         "required": True,
-                        "description": "Chat ID to associate with the todo"
+                        "description": "Chat ID to associate with the todo. Use the actual chat session ID, NOT the user_id"
                     },
                     "agent_name": {
                         "type": "string",
@@ -1164,7 +1123,7 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "todo_id": {
                         "type": "string",
                         "required": False,
-                        "description": "Todo ID for update, read, next_task, add_task actions"
+                        "description": "Todo ID for update, read, next_task, add_task actions. Use the MongoDB ObjectId returned from create action, NOT user_id + '_todo'"
                     },
                     "step_num": {
                         "type": "integer",

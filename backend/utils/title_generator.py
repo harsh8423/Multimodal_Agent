@@ -7,22 +7,31 @@ Generates meaningful chat titles from user messages using AI models.
 import asyncio
 import logging
 from typing import Optional
-from models.chat_gemini import orchestrator_function_gemini
+from utils.utility import chat_model_router
+from config.chat_model_config import get_final_config
 
 logger = logging.getLogger(__name__)
 
 
-async def generate_chat_title(user_message: str, model_name: str = "gemini-2.5-flash") -> str:
+async def generate_chat_title(user_message: str, model_name: Optional[str] = None, chat_llm_model: Optional[str] = None) -> str:
     """
     Generate a concise chat title (3-5 words) from the user's first message.
     
     Args:
         user_message: The user's message content
-        model_name: The model to use for title generation
+        model_name: Optional model name (uses config if not provided)
+        chat_llm_model: Optional chat model provider (uses config if not provided)
         
     Returns:
         A concise title (4-8 words) or "New Chat" if generation fails
     """
+    # Get chat model configuration from central config
+    config = get_final_config(tool_name="title_generator")
+    
+    # Use provided parameters or fall back to config
+    final_model_name = model_name or config["model_name"]
+    final_chat_llm_model = chat_llm_model or config["chat_llm_model"]
+    
     if not user_message or not user_message.strip():
         return "New Chat"
     
@@ -34,13 +43,12 @@ async def generate_chat_title(user_message: str, model_name: str = "gemini-2.5-f
     # First try to use AI model if API key is available
     try:
         print(f"[title-generator] Generating title for message: '{clean_message[:50]}...'")
-        # Use the synchronous orchestrator_function_gemini in an async context
-        response = await asyncio.get_event_loop().run_in_executor(
-            None,
-            orchestrator_function_gemini,
-            "Generate a 4-8 word title for this message",
+        # Use the chat model router with JSON format requirement
+        response = await chat_model_router(
+            "Generate a 4-8 word title for this message. Respond with JSON format containing a 'title' field.",
             f"User message: {clean_message}",
-            model_name
+            final_chat_llm_model,
+            final_model_name
         )
         print(f"[title-generator] Received response: {response}")
         
@@ -133,12 +141,12 @@ def generate_fallback_title(message: str) -> str:
             return "New Chat"
 
 
-async def generate_chat_title_sync(user_message: str, model_name: str = "gemini-2.5-flash") -> str:
+async def generate_chat_title_sync(user_message: str, model_name: Optional[str] = None, chat_llm_model: Optional[str] = None) -> str:
     """
     Synchronous wrapper for title generation.
     """
     try:
-        return await generate_chat_title(user_message, model_name)
+        return await generate_chat_title(user_message, model_name, chat_llm_model)
     except Exception as e:
         logger.error(f"Sync title generation failed: {e}")
         return "New Chat"

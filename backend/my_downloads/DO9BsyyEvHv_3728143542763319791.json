@@ -1,0 +1,436 @@
+{
+    "instaloader": {
+        "node_type": "Post",
+        "version": "4.14.2"
+    },
+    "node": {
+        "__isXDTGraphMediaInterface": "XDTGraphImage",
+        "__typename": "GraphImage",
+        "accessibility_caption": "Photo by Startup Stories By DOC on September 23, 2025. May be an image of phone, screen and text that says \"8:27B \u0ba4\u0bcd\u0baa\u0baa\u0bb0 a Swrch \"\"\" KyberP KiayberPakhitan.. Paktrhan.. 11\u00b0 Mo Mos \u0e23\u0e23\u0e34\u0e21 \u0e41\u0e28 \u0e40\u0e25 A\u043b RE Cosler aslrson hiph E11 mu \u0e01\u0e19 \u0e42\u0e1a MmT mE \u0e01\u0e25\u0e17\u0e17 \uc2e0\ud06c\uc0c1 n\u043be 10 D \u0e21\u0e32\u0e40\u0e23\u0e22 Turor 42% 92% 2/180CAL 1/30MIN 4/11HAS Hseti upa DIo \u6e2f ROz 0rBoces \uc2dc\ud0c0\uc785 \u0e22\u0e1b\u0e34\u0e07\u0e08\u0e01 Peshawar LPBILE 33Sure Presented by StartupbyDoC DOC #Apple Apple to Launch Foldable Iphone! Apple's 1st Foldables iPhones are expected to launch in 2026 alongside the iPhone 18 series\".",
+        "can_see_insights_as_brand": false,
+        "caption_is_edited": false,
+        "coauthor_producers": [],
+        "commenting_disabled_for_viewer": false,
+        "comments_disabled": false,
+        "dimensions": {
+            "height": 1350,
+            "width": 1080
+        },
+        "display_resources": [
+            {
+                "config_height": 800,
+                "config_width": 640,
+                "src": "https://instagram.fixc1-4.fna.fbcdn.net/v/t51.2885-15/552528869_17904731940253968_3452503909321117345_n.jpg?stp=dst-jpg_e35_p640x640_sh0.08_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6ImltYWdlX3VybGdlbi4xMzUweDE2ODguc2RyLmY4Mjc4Ny5kZWZhdWx0X2ltYWdlLmMyIn0&_nc_ht=instagram.fixc1-4.fna.fbcdn.net&_nc_cat=100&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=DJpQPmqi_ksQ7kNvwGRiM8h&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfdUOlA6ALoycK-mVWhXRH6W84A99GZMNRDKXd-N8r8gOA&oe=68F01593&_nc_sid=d885a2"
+            },
+            {
+                "config_height": 937,
+                "config_width": 750,
+                "src": "https://instagram.fixc1-4.fna.fbcdn.net/v/t51.2885-15/552528869_17904731940253968_3452503909321117345_n.jpg?stp=dst-jpg_e35_p750x750_sh0.08_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6ImltYWdlX3VybGdlbi4xMzUweDE2ODguc2RyLmY4Mjc4Ny5kZWZhdWx0X2ltYWdlLmMyIn0&_nc_ht=instagram.fixc1-4.fna.fbcdn.net&_nc_cat=100&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=DJpQPmqi_ksQ7kNvwGRiM8h&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfcWd-gBToLFc3DkHNpiLvLzW81zkWOjpaKM7jUczLuO7Q&oe=68F01593&_nc_sid=d885a2"
+            },
+            {
+                "config_height": 1350,
+                "config_width": 1080,
+                "src": "https://instagram.fixc1-4.fna.fbcdn.net/v/t51.2885-15/552528869_17904731940253968_3452503909321117345_n.jpg?stp=dst-jpg_e35_p1080x1080_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6ImltYWdlX3VybGdlbi4xMzUweDE2ODguc2RyLmY4Mjc4Ny5kZWZhdWx0X2ltYWdlLmMyIn0&_nc_ht=instagram.fixc1-4.fna.fbcdn.net&_nc_cat=100&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=DJpQPmqi_ksQ7kNvwGRiM8h&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_Afeoy52elApZsGVQ4SM4-oAkuIAWu5n81Eb8ms_P3LBPvw&oe=68F01593&_nc_sid=d885a2"
+            }
+        ],
+        "display_url": "https://instagram.fixc1-4.fna.fbcdn.net/v/t51.2885-15/552528869_17904731940253968_3452503909321117345_n.jpg?stp=dst-jpg_e35_p1080x1080_sh0.08_tt6&_nc_ht=instagram.fixc1-4.fna.fbcdn.net&_nc_cat=100&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=DJpQPmqi_ksQ7kNvwGRiM8h&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfcyagSQjUjQDrgKsUfBn6gxv42B5b-gihD7BmJA9SBdtA&oe=68F01593&_nc_sid=d885a2",
+        "edge_media_preview_comment": {
+            "count": 77,
+            "edges": [
+                {
+                    "node": {
+                        "created_at": 1760109803,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "id": "18095193661779725",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "61263972157",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-3.fna.fbcdn.net/v/t51.2885-19/560024132_17946685749044158_7693358605931682837_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fixc1-3.fna.fbcdn.net&_nc_cat=110&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=GsQQAazfaXcQ7kNvwEat_x0&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfeXnCD_l5c3Lqge3Z65HQopZE5pJ-D9ps5NoMJl-unk2A&oe=68F00A34&_nc_sid=d885a2",
+                            "username": "_aeshtic_irfan"
+                        },
+                        "text": "\ud83d\ude02\ud83d\ude02\ud83d\ude02\ud83d\ude02",
+                        "viewer_has_liked": false
+                    }
+                },
+                {
+                    "node": {
+                        "created_at": 1760160227,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "id": "18044277185389878",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "70616285107",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-4.fna.fbcdn.net/v/t51.2885-19/560905012_17890802457357108_4448362589033431238_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fixc1-4.fna.fbcdn.net&_nc_cat=100&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=9w-rcCfVZswQ7kNvwHSX6ml&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfcsOOEG9nsFR2m5OrcgixmwsIekLUEPl6x-pKHHksaaiw&oe=68F02176&_nc_sid=d885a2",
+                            "username": "muazzam__786"
+                        },
+                        "text": "Samsung be like : - Beta baap se hi sikhta hai \ud83e\udd70",
+                        "viewer_has_liked": false
+                    }
+                }
+            ]
+        },
+        "edge_media_preview_like": {
+            "count": 6388,
+            "edges": []
+        },
+        "edge_media_to_caption": {
+            "edges": [
+                {
+                    "node": {
+                        "created_at": "1758649365",
+                        "id": "18371282716144536",
+                        "text": "Apple is set to join the foldable phone market. \n\nThe iPhone Fold is expected in 2026 alongside the iPhone 18. It may resemble Samsung\u2019s Galaxy Z Fold. \n\nA crease-free display is in development. The price could start at $1,999. Analysts predict significant revenue. \n\nThis move could reshape the foldable phone industry.\n\nFor more must follow @startupbydoc \n\nDisclaimer:\nContent is shared for educational, storytelling, and commentary purposes under Fair Use (Section 107). We transform original material with insight and narrative. \n\nNo ownership claimed on third-party assets credit given when possible.\n\nDM for credit or takedown.\n\u00a9\ufe0f StartupbyDOC Media. Reposts, reuploads & AI scraping are prohibited.\n\n#apple #iphone #trending #news #samsung #foldablephone #business #explorepage #startupbydoc #viral"
+                    }
+                }
+            ]
+        },
+        "edge_media_to_hoisted_comment": {
+            "edges": []
+        },
+        "edge_media_to_parent_comment": {
+            "count": 77,
+            "edges": [
+                {
+                    "node": {
+                        "created_at": 1760160227,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "edge_threaded_comments": {
+                            "count": 0,
+                            "edges": [],
+                            "page_info": {
+                                "end_cursor": null,
+                                "has_next_page": false
+                            }
+                        },
+                        "id": "18044277185389878",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "70616285107",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-4.fna.fbcdn.net/v/t51.2885-19/560905012_17890802457357108_4448362589033431238_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fixc1-4.fna.fbcdn.net&_nc_cat=100&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=9w-rcCfVZswQ7kNvwHSX6ml&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfcsOOEG9nsFR2m5OrcgixmwsIekLUEPl6x-pKHHksaaiw&oe=68F02176&_nc_sid=d885a2",
+                            "username": "muazzam__786"
+                        },
+                        "text": "Samsung be like : - Beta baap se hi sikhta hai \ud83e\udd70",
+                        "viewer_has_liked": false
+                    }
+                },
+                {
+                    "node": {
+                        "created_at": 1760109803,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "edge_threaded_comments": {
+                            "count": 0,
+                            "edges": [],
+                            "page_info": {
+                                "end_cursor": null,
+                                "has_next_page": false
+                            }
+                        },
+                        "id": "18095193661779725",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "61263972157",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-3.fna.fbcdn.net/v/t51.2885-19/560024132_17946685749044158_7693358605931682837_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fixc1-3.fna.fbcdn.net&_nc_cat=110&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=GsQQAazfaXcQ7kNvwEat_x0&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfeXnCD_l5c3Lqge3Z65HQopZE5pJ-D9ps5NoMJl-unk2A&oe=68F00A34&_nc_sid=d885a2",
+                            "username": "_aeshtic_irfan"
+                        },
+                        "text": "\ud83d\ude02\ud83d\ude02\ud83d\ude02\ud83d\ude02",
+                        "viewer_has_liked": false
+                    }
+                },
+                {
+                    "node": {
+                        "created_at": 1760025466,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "edge_threaded_comments": {
+                            "count": 0,
+                            "edges": [],
+                            "page_info": {
+                                "end_cursor": null,
+                                "has_next_page": false
+                            }
+                        },
+                        "id": "18057875909188793",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "75844059764",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-5.fna.fbcdn.net/v/t51.2885-19/560441126_17857959765531765_4322750922172830943_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fixc1-5.fna.fbcdn.net&_nc_cat=109&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=BfM1rjWQF4sQ7kNvwG2lHOm&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_Aff31Y0kv9VAgCCjCQ-axguxQ6J1fxdS2yJHxTdITP9yAA&oe=68F0133D&_nc_sid=d885a2",
+                            "username": "aaryanmakwana_2010"
+                        },
+                        "text": "\ud83d\ude02\ud83d\ude02",
+                        "viewer_has_liked": false
+                    }
+                },
+                {
+                    "node": {
+                        "created_at": 1760015323,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "edge_threaded_comments": {
+                            "count": 0,
+                            "edges": [],
+                            "page_info": {
+                                "end_cursor": null,
+                                "has_next_page": false
+                            }
+                        },
+                        "id": "17928215634105409",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "1492836490",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-4.fna.fbcdn.net/v/t51.2885-19/386311766_1083907812981253_6087569095984276451_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby43MjAuYzIifQ&_nc_ht=instagram.fixc1-4.fna.fbcdn.net&_nc_cat=101&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=sCc_CLwRLT8Q7kNvwH0eDb1&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfecCaeVxDABWYvpL7qjSopRTf8I1sjctpvc_mPciZmzLQ&oe=68F01C7B&_nc_sid=d885a2",
+                            "username": "jubin_jct"
+                        },
+                        "text": "\ud83d\ude02\ud83d\ude02\ud83d\ude02\ud83d\ude02\ud83d\ude02\ud83d\ude02",
+                        "viewer_has_liked": false
+                    }
+                },
+                {
+                    "node": {
+                        "created_at": 1759995635,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "edge_threaded_comments": {
+                            "count": 0,
+                            "edges": [],
+                            "page_info": {
+                                "end_cursor": null,
+                                "has_next_page": false
+                            }
+                        },
+                        "id": "18067151525042468",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "52225670713",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-8.fna.fbcdn.net/v/t51.2885-19/544089974_18023694191742714_1510524581608268579_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDc0LmMyIn0&_nc_ht=instagram.fixc1-8.fna.fbcdn.net&_nc_cat=106&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=gXd12LP_2hEQ7kNvwFCPdqK&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AffxDcP5QgJFUKaLJSmu2RuPXf8bseAr9ugtmMQETGIMBA&oe=68F019A8&_nc_sid=d885a2",
+                            "username": "iimanujj"
+                        },
+                        "text": "2026\u274e8026\u2705",
+                        "viewer_has_liked": false
+                    }
+                },
+                {
+                    "node": {
+                        "created_at": 1759981169,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "edge_threaded_comments": {
+                            "count": 0,
+                            "edges": [],
+                            "page_info": {
+                                "end_cursor": null,
+                                "has_next_page": false
+                            }
+                        },
+                        "id": "18341453233201932",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "4812638234",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-8.fna.fbcdn.net/v/t51.2885-19/67288906_354275678580930_8332068887306698752_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fixc1-8.fna.fbcdn.net&_nc_cat=106&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=NXMpT1wzGxMQ7kNvwFYg6-m&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfedQZ1YjMlFjOj2bhLx1TQ0k91DjlWYwK1x08QpNDBTmw&oe=68F0133A&_nc_sid=d885a2",
+                            "username": "143__seenu__"
+                        },
+                        "text": "Chlo fir 18 he laga",
+                        "viewer_has_liked": false
+                    }
+                },
+                {
+                    "node": {
+                        "created_at": 1759980349,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "edge_threaded_comments": {
+                            "count": 0,
+                            "edges": [],
+                            "page_info": {
+                                "end_cursor": null,
+                                "has_next_page": false
+                            }
+                        },
+                        "id": "17950199673020591",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "77130524344",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-10.fna.fbcdn.net/v/t51.2885-19/552401090_17845513395572345_4469641137311789972_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fixc1-10.fna.fbcdn.net&_nc_cat=105&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=4m1sybfDQQ8Q7kNvwEyg-AV&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfdDWfmFI75jcVlqXKo7GU2me_T_bbFMP2xF0OktT31EJg&oe=68F0214C&_nc_sid=d885a2",
+                            "username": "miss_borahz"
+                        },
+                        "text": "Mujhe bilkul pasnd nhi\ud83d\ude02",
+                        "viewer_has_liked": false
+                    }
+                },
+                {
+                    "node": {
+                        "created_at": 1759921056,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "edge_threaded_comments": {
+                            "count": 0,
+                            "edges": [],
+                            "page_info": {
+                                "end_cursor": null,
+                                "has_next_page": false
+                            }
+                        },
+                        "id": "18047073839355847",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "2277163663",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-7.fna.fbcdn.net/v/t51.2885-19/563303486_18485068918075664_7653213617936722299_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby41ODUuYzIifQ&_nc_ht=instagram.fixc1-7.fna.fbcdn.net&_nc_cat=108&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=SCET3BOozz4Q7kNvwF73iuN&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AffgxN0I4-OM_4_MhwpRIgI_ksW1mwvtEDCkh_6pRew0sQ&oe=68F0211B&_nc_sid=d885a2",
+                            "username": "deepanshu_vrm"
+                        },
+                        "text": "Samsung ka hi worst hai Apple ka to pata Nhn Kya hi aaye ga worst models r foldables",
+                        "viewer_has_liked": false
+                    }
+                },
+                {
+                    "node": {
+                        "created_at": 1759846901,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 0
+                        },
+                        "edge_threaded_comments": {
+                            "count": 0,
+                            "edges": [],
+                            "page_info": {
+                                "end_cursor": null,
+                                "has_next_page": false
+                            }
+                        },
+                        "id": "18091744714836477",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "30842966924",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fgpb1-1.fna.fbcdn.net/v/t51.2885-19/464760996_1254146839119862_3605321457742435801_n.png?stp=dst-jpg_e0_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xNTAuYzIifQ&_nc_ht=instagram.fgpb1-1.fna.fbcdn.net&_nc_cat=1&_nc_oc=Q6cZ2QHO7OdEfWV_BuXpYdy4hg32XEDpZ62CtGv5-wd0-YeT14hWoDMHdRcCZHg0ElPfOCzzUEEGDgqeRSXEtyPcvkl1&_nc_ohc=2wEOmevE4QkQ7kNvwFyHSjt&_nc_gid=OrYdZCoKibXlkLldQ8aKEA&edm=AJ9x6zYBAAAA&ccb=7-5&ig_cache_key=YW5vbnltb3VzX3Byb2ZpbGVfcGlj.3-ccb7-5&oh=00_Afd2EkKJlarHBzirNrK7r7gVBunTnd_GbD9dYJimTDCJIA&oe=68F028A8&_nc_sid=65462d",
+                            "username": "sssahill__4"
+                        },
+                        "text": "Samsung will so proud of you....\ud83d\ude02\ud83d\ude02",
+                        "viewer_has_liked": false
+                    }
+                },
+                {
+                    "node": {
+                        "created_at": 1759774520,
+                        "did_report_as_spam": false,
+                        "edge_liked_by": {
+                            "count": 1
+                        },
+                        "edge_threaded_comments": {
+                            "count": 0,
+                            "edges": [],
+                            "page_info": {
+                                "end_cursor": null,
+                                "has_next_page": false
+                            }
+                        },
+                        "id": "18072845401898969",
+                        "is_restricted_pending": false,
+                        "owner": {
+                            "id": "49984384242",
+                            "is_verified": false,
+                            "profile_pic_url": "https://instagram.fixc1-8.fna.fbcdn.net/v/t51.2885-19/244629893_178697531079232_563618394125737420_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fixc1-8.fna.fbcdn.net&_nc_cat=104&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=IVyS3qSZkE4Q7kNvwElPfrY&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfdaXam6Ae49t0whDSWRIJeIQrvElV-wkbr32SofvGjrdw&oe=68F0233A&_nc_sid=d885a2",
+                            "username": "cyclon_artist"
+                        },
+                        "text": "Advance RIP Ipads",
+                        "viewer_has_liked": false
+                    }
+                }
+            ],
+            "page_info": {
+                "end_cursor": "{\"server_cursor\": \"QVFDTml5cEI5SEdwNm1YYmZnSk5BeTFmdzJfRXJ1LXpLQmVIR1lBZF9aVXY5RkVnUnV4S3Jmc3F2WTE5cjFqQVpHYl9sU19wR3R6VmJPVFIxaGUwNW16Yw==\", \"is_server_cursor_inverse\": true}",
+                "has_next_page": true
+            }
+        },
+        "edge_media_to_sponsor_user": {
+            "edges": []
+        },
+        "edge_media_to_tagged_user": {
+            "edges": []
+        },
+        "edge_web_media_to_related_media": {
+            "edges": []
+        },
+        "fact_check_information": null,
+        "fact_check_overall_rating": null,
+        "gating_info": null,
+        "has_ranked_comments": false,
+        "id": "3728143542763319791",
+        "is_ad": false,
+        "is_affiliate": false,
+        "is_paid_partnership": false,
+        "is_video": false,
+        "like_and_view_counts_disabled": false,
+        "location": null,
+        "media_overlay_info": null,
+        "media_preview": "ACIqy7OEYDsu5Seen5AngU77OPMBYDBDHA6cDNLYxMULFiqZ4A659fanFWFwUZtwUMAfwqVuPoTfZrWUgLkEnGOn/wBarj6dBGpAUE468k0PYLCDIjHK8gYGOPpRDK7x5k+9n6cZGOK3/rYxOXYYJFFK3U/U0Vkal62nZEA7K27647EU2ScNKzqCFO7GevNSWZiCHzAjEn+JsEAAe3Qk/U4qywhPRYRg/wDPTrwePz7/ANKZVl3K32s4AHHHPXrUtvI2045OecsBx17mhViIJKxYyR/rCP6c9OD0wajkWMKSBF0PRyT7YHrx9PWi4Oz31/AzW6mikopEkkYGef8AP6GrAwDnA49h/wDE1Tpdx9TQNal0Njsp/wCAr/8AE1BPgnPAPoMD9ABUO4+poJJ60AxKKKKBH//Z",
+        "nft_asset_info": null,
+        "owner": {
+            "blocked_by_viewer": false,
+            "edge_followed_by": {
+                "count": 947018
+            },
+            "followed_by_viewer": false,
+            "full_name": "Startup Stories By DOC",
+            "has_blocked_viewer": false,
+            "id": "67582893967",
+            "is_embeds_disabled": false,
+            "is_private": false,
+            "is_unpublished": false,
+            "is_verified": false,
+            "pass_tiering_recommendation": true,
+            "profile_pic_url": "https://instagram.fixc1-4.fna.fbcdn.net/v/t51.2885-19/450570609_369046346203773_8187923613689291258_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fixc1-4.fna.fbcdn.net&_nc_cat=1&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=6aNN-8WSrIAQ7kNvwFVQuJZ&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AffS0hJ-uP7m-LwgmFP8ORyFV-tzZtzXUOCrjEtShZF6TQ&oe=68F02759&_nc_sid=d885a2",
+            "requested_by_viewer": false,
+            "restricted_by_viewer": null,
+            "username": "startupbydoc"
+        },
+        "pinned_for_users": [],
+        "sensitivity_friction_info": null,
+        "sharing_friction_info": {
+            "bloks_app_url": null,
+            "should_have_sharing_friction": false
+        },
+        "shortcode": "DO9BsyyEvHv",
+        "taken_at_timestamp": 1758649364,
+        "thumbnail_src": "https://instagram.fixc1-4.fna.fbcdn.net/v/t51.2885-15/552528869_17904731940253968_3452503909321117345_n.jpg?stp=c0.169.1350.1350a_dst-jpg_e35_s640x640_sh0.08_tt6&_nc_ht=instagram.fixc1-4.fna.fbcdn.net&_nc_cat=100&_nc_oc=Q6cZ2QH1OJHYG9NNXaeNM5ojGOrBTOBJO3WAI6Svhm2MFFgH4Jp_n6Ur9eVXFJ6231iTsWGNz4pCKecfvEjtDHHcnt3-&_nc_ohc=DJpQPmqi_ksQ7kNvwGRiM8h&_nc_gid=zDaCcAUfG5cJ2HK8N122Ow&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AfeCO2dVPerWaiyFxvhX53u7RBTAVfnFdWoSH5NA53vEpg&oe=68F01593&_nc_sid=d885a2",
+        "tracking_token": "eyJ2ZXJzaW9uIjo1LCJwYXlsb2FkIjp7ImlzX2FuYWx5dGljc190cmFja2VkIjp0cnVlLCJ1dWlkIjoiNDY0MWM1MDUyZmNiNDA2YmJiODRkMjI5ODJkOTI1N2UzNzI4MTQzNTQyNzYzMzE5NzkxIn0sInNpZ25hdHVyZSI6IiJ9",
+        "upcoming_event": null,
+        "viewer_can_reshare": true,
+        "viewer_has_liked": false,
+        "viewer_has_saved": false,
+        "viewer_has_saved_to_collection": false,
+        "viewer_in_photo_of_you": false
+    }
+}
