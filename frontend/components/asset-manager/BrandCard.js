@@ -123,6 +123,20 @@ export default function BrandCard({ brand, onEdit, onDelete, onDuplicate }) {
               {brand.details.industry}
             </div>
           )}
+
+          {/* Brand Voice Information */}
+          {(brand.voice_name || brand.voice_id) && (
+            <div className="flex items-center text-sm text-gray-600">
+              <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+              <span>
+                {brand.voice_name && <span className="font-medium">{brand.voice_name}</span>}
+                {brand.voice_name && brand.voice_id && <span className="text-gray-400 mx-1">•</span>}
+                {brand.voice_id && <span className="text-gray-500">ID: {brand.voice_id}</span>}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Audience Tags */}

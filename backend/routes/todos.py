@@ -61,7 +61,11 @@ async def get_chat_todos(
     
     todos = await todo_manager.get_chat_todos(chat_id, status)
     
-    return todos
+    # Serialize ObjectIds and other MongoDB types for JSON response
+    from tools.todo_manager import serialize_for_json
+    serialized_todos = serialize_for_json(todos)
+    
+    return serialized_todos
 
 
 @router.get("/{todo_id}")
@@ -77,7 +81,11 @@ async def get_todo(
     if not todo:
         raise HTTPException(status_code=404, detail="Todo not found")
     
-    return todo
+    # Serialize ObjectIds and other MongoDB types for JSON response
+    from tools.todo_manager import serialize_for_json
+    serialized_todo = serialize_for_json(todo)
+    
+    return serialized_todo
 
 
 @router.post("/create")
@@ -104,7 +112,11 @@ async def create_todo(request: CreateTodoRequest) -> dict:
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Failed to create todo"))
     
-    return result
+    # Serialize ObjectIds and other MongoDB types for JSON response
+    from tools.todo_manager import serialize_for_json
+    serialized_result = serialize_for_json(result)
+    
+    return serialized_result
 
 
 @router.put("/{todo_id}/task/{step_num}")
@@ -128,7 +140,11 @@ async def update_todo_task(
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Failed to update todo task"))
     
-    return result
+    # Serialize ObjectIds and other MongoDB types for JSON response
+    from tools.todo_manager import serialize_for_json
+    serialized_result = serialize_for_json(result)
+    
+    return serialized_result
 
 
 @router.get("/{todo_id}/next-task")
@@ -142,7 +158,13 @@ async def get_next_todo_task(
     
     next_task = await todo_manager.get_next_pending_task(todo_id)
     
-    return {
+    result = {
         "success": True,
         "next_task": next_task
     }
+    
+    # Serialize ObjectIds and other MongoDB types for JSON response
+    from tools.todo_manager import serialize_for_json
+    serialized_result = serialize_for_json(result)
+    
+    return serialized_result

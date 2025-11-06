@@ -31,6 +31,8 @@ class BrandCreateRequest(BaseModel):
         default_factory=DefaultPostingSettings, 
         description="Default posting configuration"
     )
+    voice_name: Optional[str] = Field(None, max_length=100, description="Brand voice name")
+    voice_id: Optional[str] = Field(None, max_length=100, description="Brand voice ID")
 
 
 class BrandUpdateRequest(BaseModel):
@@ -40,6 +42,8 @@ class BrandUpdateRequest(BaseModel):
     theme: Optional[BrandTheme] = None
     details: Optional[BrandDetails] = None
     default_posting_settings: Optional[DefaultPostingSettings] = None
+    voice_name: Optional[str] = Field(None, max_length=100)
+    voice_id: Optional[str] = Field(None, max_length=100)
 
 
 class BrandResponse(BaseModel):
@@ -51,6 +55,8 @@ class BrandResponse(BaseModel):
     theme: BrandTheme
     details: BrandDetails
     default_posting_settings: DefaultPostingSettings
+    voice_name: Optional[str]
+    voice_id: Optional[str]
     created_at: datetime
     updated_at: datetime
     metadata: Dict[str, Any]

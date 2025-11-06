@@ -62,7 +62,7 @@ def filter_tool_parameters(tool_name: str, input_schema_fields: Dict[str, Any]) 
         "search_instagram_with_apify": {"query", "count", "sort"},
         "unified_search": {"query", "platform", "count", "sort"},
         "get_media": {"url", "upload_to_cloudinary_flag", "custom_config"},
-        "manage_todos": {"action", "chat_id", "agent_name", "tasks", "todo_id", "status", "description", "step_num", "updates", "title", "task", "user_id"},
+        "manage_todos": {"action", "chat_id", "agent_name", "tasks", "todo_id", "status", "description", "step_num", "updates", "title", "task", "user_id", "session_context"},
         "generate_content_plan": {"platform_name", "content_type", "user_brief"},
         "get_user_brands": {"user_id", "search", "limit", "offset"},
         "get_brand_by_id": {"brand_id"},
@@ -72,15 +72,17 @@ def filter_tool_parameters(tool_name: str, input_schema_fields: Dict[str, Any]) 
         "get_scraped_posts": {"user_id", "platform", "brand", "competitor", "date_from", "date_to", "engagement_min", "engagement_max", "text_search", "limit", "offset"},
         "get_user_templates": {"user_id", "type", "status", "limit", "offset"},
         "get_template_by_id": {"template_id"},
-        "create_brand": {"user_id", "name", "description", "website", "industry", "target_audience"},
-        "update_brand": {"brand_id", "name", "description", "website", "industry", "target_audience"},
-        "delete_brand": {"brand_id"},
-        "create_competitor": {"user_id", "name", "platform", "brand", "description", "website", "followers"},
-        "update_competitor": {"competitor_id", "name", "platform", "brand", "description", "website", "followers"},
-        "delete_competitor": {"competitor_id"},
-        "create_template": {"user_id", "name", "type", "content", "description", "status"},
-        "update_template": {"template_id", "name", "type", "content", "description", "status"},
-        "delete_template": {"template_id"},
+        "create_brand": {"user_id", "brand_data"},
+        "update_brand": {"user_id", "brand_id", "update_data"},
+        "delete_brand": {"user_id", "brand_id"},
+        "create_competitor": {"user_id", "competitor_data"},
+        "update_competitor": {"user_id", "competitor_id", "update_data"},
+        "delete_competitor": {"user_id", "competitor_id"},
+        "create_template": {"user_id", "template_data"},
+        "update_template": {"user_id", "template_id", "update_data"},
+        "delete_template": {"user_id", "template_id"},
+        "scrape_competitor_data": {"user_id", "competitor_id", "limit"},
+        "perform_bulk_scraping": {"user_id", "scraping_requests"},
         "diagnose_agent_error": {"agent_name", "error_message", "agent_query", "agent_output"}
     }
     
@@ -93,11 +95,16 @@ def filter_tool_parameters(tool_name: str, input_schema_fields: Dict[str, Any]) 
             print(f"🔧 TOOL_ROUTER: Filtered invalid parameters for {tool_name}: {invalid_params}")
             return filtered_fields
     
-    # Additional safety check: Remove any SessionContext objects
+    # Additional safety check: Remove any SessionContext objects (except for manage_todos)
     safe_fields = {}
     for key, value in input_schema_fields.items():
         if hasattr(value, '__class__') and 'SessionContext' in str(value.__class__):
-            print(f"🔧 TOOL_ROUTER: WARNING - SessionContext object found in parameter '{key}' for tool '{tool_name}' - removing")
+            if tool_name == "manage_todos" and key == "session_context":
+                # Allow session_context for manage_todos
+                safe_fields[key] = value
+                print(f"🔧 TOOL_ROUTER: Allowing SessionContext object for manage_todos tool")
+            else:
+                print(f"🔧 TOOL_ROUTER: WARNING - SessionContext object found in parameter '{key}' for tool '{tool_name}' - removing")
         else:
             safe_fields[key] = value
     

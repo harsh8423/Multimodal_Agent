@@ -22,6 +22,28 @@ from utils.session_memory import SessionContext, LogEntry, AgentMemory
 logger = logging.getLogger(__name__)
 
 
+def serialize_objectid(obj: Any) -> Any:
+    """
+    Recursively serialize ObjectId instances to strings for JSON serialization
+    
+    Args:
+        obj: Object to serialize
+        
+    Returns:
+        JSON-serializable object
+    """
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {key: serialize_objectid(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_objectid(item) for item in obj]
+    else:
+        return obj
+
+
 class MongoStore:
     """MongoDB store for session and chat data persistence"""
     
@@ -100,7 +122,8 @@ class MongoStore:
     async def get_chat(self, chat_id: str) -> Optional[Dict[str, Any]]:
         """Get chat document by chat_id"""
         try:
-            return await self.chats_collection.find_one({"chat_id": chat_id})
+            chat = await self.chats_collection.find_one({"chat_id": chat_id})
+            return serialize_objectid(chat) if chat else None
         except Exception as e:
             logger.error(f"Failed to get chat: {e}")
             return None
@@ -111,7 +134,8 @@ class MongoStore:
             cursor = self.chats_collection.find(
                 {"user_id": user_id}
             ).sort("last_active", -1).limit(limit)
-            return await cursor.to_list(length=limit)
+            chats = await cursor.to_list(length=limit)
+            return [serialize_objectid(chat) for chat in chats]
         except Exception as e:
             logger.error(f"Failed to get user chats: {e}")
             return []
@@ -170,7 +194,8 @@ class MongoStore:
             cursor = self.chat_messages_collection.find(
                 {"chat_id": chat_id}
             ).sort("timestamp", sort_order).limit(limit)
-            return await cursor.to_list(length=limit)
+            messages = await cursor.to_list(length=limit)
+            return [serialize_objectid(msg) for msg in messages]
         except Exception as e:
             logger.error(f"Failed to get chat messages: {e}")
             return []
@@ -206,7 +231,8 @@ class MongoStore:
                 query["agent"] = agent
             
             cursor = self.agent_memories_collection.find(query).sort("ts", 1).limit(limit)
-            return await cursor.to_list(length=limit)
+            memories = await cursor.to_list(length=limit)
+            return [serialize_objectid(memory) for memory in memories]
         except Exception as e:
             logger.error(f"Failed to load agent memories: {e}")
             return []

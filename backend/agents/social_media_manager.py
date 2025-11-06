@@ -227,7 +227,7 @@ When you need to update the todo list, call the manage_todos tool with a query l
         system_prompt = (
             "You are an intelligent social media manager. Analyze the user query and respond with JSON: "
             "{\"agent_required\": boolean, \"self_response\": \"string if false\", "
-            "\"agent_name\": \"research_agent or asset_agent if true\", \"agent_query\": \"string if true\"}"
+            "\"agent_name\": \"research_agent or other valid agent if true\", \"agent_query\": \"string if true\"}"
         )
         
         if session_context:
@@ -286,17 +286,13 @@ When you need to update the todo list, call the manage_todos tool with a query l
             print(f"=== SOCIAL_MEDIA_MANAGER: Loop iteration {iteration}, needs_agent: {needs_agent}, needs_tool: {needs_tool} ===")
             print(f"=== SOCIAL_MEDIA_MANAGER: social_media_management: {social_media_management} ===")
 
-            # Validation: Only one can be true at a time
+            # Handle both agent_required and tool_required sequentially
+            # If both are true, handle agent first, then tool in next iteration
             if needs_agent and needs_tool:
-                error_response = {
-                    "agent_required": False,
-                    "self_response": "Invalid social media management state: Both agent_required and tool_required cannot be true simultaneously",
-                    "error": True
-                }
+                print(f"=== SOCIAL_MEDIA_MANAGER: Both agent and tool required - handling agent first ===")
                 if session_context:
-                    await session_context.send_nano("social_media_manager", "Error: Both agent and tool requirements detected")
-                await websocket.send_json({"text": error_response["self_response"]})
-                return error_response
+                    await session_context.send_nano("social_media_manager", "Both agent and tool required - handling agent first")
+                # Continue to agent handling logic below
 
             if not needs_agent and not needs_tool:
                 # No agent or tool required - return the response
@@ -354,7 +350,7 @@ When you need to update the todo list, call the manage_todos tool with a query l
                     return error_response
 
                 # Validate agent name
-                valid_agents = ("research_agent", "asset_agent", "media_analyst", "social_media_search_agent", "media_activist", "copy_writer", "todo_planner")
+                valid_agents = ("research_agent", "media_analyst", "social_media_search_agent", "media_activist", "copy_writer", "todo_planner", "content_analyzer")
                 if agent_name not in valid_agents:
                     error_response = {
                         "agent_required": False,
@@ -426,6 +422,40 @@ When you need to update the todo list, call the manage_todos tool with a query l
                     if agent_text:
                         print(f"[agent-response:{agent_name}] {agent_text}")
                     
+                    # Handle content_analyzer results with intelligent routing
+                    if agent_name == "content_analyzer" and isinstance(result, dict):
+                        analysis_context = result
+                        routing = analysis_context.get("routing", {})
+                        
+                        if routing.get("agent_required", False):
+                            next_agent = routing.get("agent_name", "")
+                            next_query = routing.get("agent_query", "")
+                            reasoning = routing.get("reasoning", "")
+                            
+                            if session_context:
+                                await session_context.send_nano("social_media_manager", f"Analysis complete → routing to {next_agent}")
+                                await session_context.append_and_persist_memory(
+                                    "social_media_manager",
+                                    f"Content analysis routing: {reasoning}",
+                                    {"phase": "analysis_routing", "next_agent": next_agent, "reasoning": reasoning}
+                                )
+                            
+                            # Route to the next agent with analysis context
+                            if next_agent == "todo_planner":
+                                # Pass analysis context to todo_planner
+                                next_result = await call_agent(next_agent, next_query, model_name, "openai", registry_path, session_context, user_metadata, user_image_path, analysis_context)
+                            else:
+                                # Route to other agents normally
+                                next_result = await call_agent(next_agent, next_query, model_name, "openai", registry_path, session_context, user_metadata, user_image_path)
+                            
+                            # Update result with the next agent's output
+                            result = next_result
+                            agent_text = result.get("text", "") if isinstance(result, dict) else str(result)
+                            last_text = agent_text or last_text
+                            
+                            if session_context:
+                                await session_context.send_nano("social_media_manager", f"Intelligent routing complete → {next_agent}")
+                    
                     # Check if the agent returned todo data and forward it to frontend
                     if isinstance(result, dict) and result.get("metadata", {}).get("message_type") == "todo_created":
                         todo_data = result.get("metadata", {}).get("todo_data")
@@ -456,26 +486,43 @@ When you need to update the todo list, call the manage_todos tool with a query l
                 4. This ensures continuity and proper task management across the conversation
                 """
                 
+                # Check if we need to preserve tool_required for next iteration
+                preserve_tool_required = social_media_management.get("tool_required", False)
+                tool_instruction = ""
+                tool_name = ""
+                tool_params = {}
+                if preserve_tool_required:
+                    tool_name = social_media_management.get("tool_name", "")
+                    tool_params = social_media_management.get("input_schema_fields", {})
+                    tool_instruction = f"""
+                
+                IMPORTANT: You also need to call a tool after processing the agent result. You MUST:
+                1. Set tool_required to TRUE
+                2. Set tool_name to "{tool_name}"
+                3. Set input_schema_fields to {json.dumps(tool_params)}
+                4. This ensures the tool is called in the next iteration
+                """
+                
                 follow_up_query = f"""
                 Original user message: {user_text}
 
                 Agent used: {agent_name}
                 Agent query: {agent_query}
-                Agent result: {json.dumps(result, indent=2)}{todo_planner_instruction}
+                Agent result: {json.dumps(result, indent=2)}{todo_planner_instruction}{tool_instruction}
 
                 CRITICAL INSTRUCTION: The agent has completed its task successfully. You MUST now:
                 1. Set agent_required to FALSE
-                2. You may need to call another agent or use tools based on the agent's response
+                2. {"Set tool_required to TRUE and preserve tool details" if preserve_tool_required else "You may need to call another agent or use tools based on the agent's response"}
                 3. Update your planner step statuses to reflect the agent's data
                 4. Continue with the social media management process if sufficient information is gathered
                 5. Provide comprehensive final response incorporating the agent's data
-                6. NEVER set both agent_required and tool_required to true simultaneously
+                6. {"Preserve the tool_required state for next iteration" if preserve_tool_required else "NEVER set both agent_required and tool_required to true simultaneously"}
                 
                 CRITICAL: You MUST return ONLY the JSON object in the exact schema format. NO additional text, explanations, or prose. Just the JSON:
                 {{
                   "agent_required": false,
                   "self_response": "your comprehensive response incorporating the agent's data",
-                  "tool_required": false,
+                  "tool_required": {str(preserve_tool_required).lower()}{f', "tool_name": "{tool_name}", "input_schema_fields": {json.dumps(tool_params)}' if preserve_tool_required else ''},
                   "planner": {{
                     "plan_steps": [...],
                     "summary": "updated plan summary"
@@ -533,6 +580,11 @@ When you need to update the todo list, call the manage_todos tool with a query l
                 # For todo tools, ALWAYS override chat_id with actual value from session context
                 if tool_name in ["manage_todos", "create_todo_list", "update_todo_task_status", "get_next_todo_task", "add_todo_task", "get_chat_todos"]:
                     chat_id = getattr(session_context, 'chat_id', None) if session_context else None
+                    todo_id = session_context.get_current_todo_id() if session_context else None
+
+                    print(f"🔧 session_context: {session_context}")
+                    print(f"🔧 current_todo_id from session: {todo_id}")
+
                     
                     if chat_id and isinstance(input_schema_fields, dict):
                         input_schema_fields["chat_id"] = chat_id
@@ -544,6 +596,15 @@ When you need to update the todo list, call the manage_todos tool with a query l
                             fallback_chat_id = f"fallback_{session_context.session_id if session_context else 'unknown'}"
                             input_schema_fields["chat_id"] = fallback_chat_id
                             print(f"🔧 Using fallback chat_id: {fallback_chat_id}")
+                    
+                    # Override todo_id with correct value from session context if available
+                    if todo_id and isinstance(input_schema_fields, dict):
+                        input_schema_fields["todo_id"] = todo_id
+                        print(f"🔧 Overriding todo_id with actual value: {todo_id}")
+                    elif isinstance(input_schema_fields, dict) and "todo_id" in input_schema_fields:
+                        # Remove incorrect todo_id so manage_todos can find the correct one
+                        print(f"🔧 Removing incorrect todo_id: {input_schema_fields['todo_id']}")
+                        del input_schema_fields["todo_id"]
                     
                     # Add agent name for todo tools
                     if isinstance(input_schema_fields, dict) and "agent_name" not in input_schema_fields:
@@ -557,6 +618,17 @@ When you need to update the todo list, call the manage_todos tool with a query l
                         f"Tool call decision: {tool_name} with parameters: {input_schema_fields}",
                         {"phase": "tool_call", "tool_name": tool_name, "parameters": input_schema_fields}
                     )
+
+                # Add session_context to input_schema_fields for todo tools
+                if tool_name in ["manage_todos", "create_todo_list", "update_todo_task_status", "get_next_todo_task", "add_todo_task", "get_chat_todos"] and session_context:
+                    if isinstance(input_schema_fields, dict):
+                        input_schema_fields["session_context"] = session_context
+                    elif isinstance(input_schema_fields, list):
+                        # Add session_context to the first dict in the list
+                        for item in input_schema_fields:
+                            if isinstance(item, dict):
+                                item["session_context"] = session_context
+                                break
 
                 # Call the tool using tool_router
                 try:
@@ -609,16 +681,23 @@ When you need to update the todo list, call the manage_todos tool with a query l
                             agent="social_media_manager"
                         )
                 
-                # Send WebSocket message with todo data if it's a todo creation
+                # Send WebSocket message with todo data only when creating a new todo
                 if tool_name == "manage_todos" and isinstance(tool_result, dict) and tool_result.get("success"):
                     todo_data = tool_result.get("todo_data")
-                    if todo_data:
+                    action = tool_result.get("action", "unknown")
+                    
+                    # Only send message when creating a new todo, not on updates
+                    if todo_data and action == "create":
+                        message_text = f"Created todo list: {todo_data.get('title', 'Untitled')}"
+                        message_type = "todo_created"
+                        
                         await websocket.send_json({
-                            "text": f"Created todo list: {todo_data.get('title', 'Untitled')}",
+                            "text": message_text,
                             "agent_name": "social_media_manager",
                             "metadata": {
                                 "todo_data": todo_data,
-                                "message_type": "todo_created"
+                                "message_type": message_type,
+                                "action": action
                             }
                         })
 
@@ -635,7 +714,7 @@ When you need to update the todo list, call the manage_todos tool with a query l
                 3. Update your planner step statuses
                 4. Continue with social media management process incorporating the tool's data
                 5. Provide comprehensive final response
-                6. NEVER set both agent_required and tool_required to true simultaneously
+                6. You can set agent_required to true if another agent is needed, but never both agent_required and tool_required simultaneously
                 
                 CRITICAL: You MUST return ONLY the JSON object in the exact schema format. NO additional text, explanations, or prose. Just the JSON:
                 {{

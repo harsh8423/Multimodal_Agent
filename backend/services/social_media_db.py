@@ -42,10 +42,18 @@ class SocialMediaDBService:
     async def create_brand(self, brand_data: Dict[str, Any]) -> str:
         """Create a new brand"""
         db = await self.get_db()
-        brand_data["created_at"] = datetime.utcnow()
-        brand_data["updated_at"] = datetime.utcnow()
         
-        result = await db.brands.insert_one(brand_data)
+        # Validate brand data using Pydantic model
+        try:
+            brand_model = Brand(**brand_data)
+            validated_data = brand_model.dict(by_alias=True, exclude={"id"})
+        except Exception as e:
+            raise ValueError(f"Invalid brand data: {str(e)}")
+        
+        validated_data["created_at"] = datetime.utcnow()
+        validated_data["updated_at"] = datetime.utcnow()
+        
+        result = await db.brands.insert_one(validated_data)
         return str(result.inserted_id)
     
     async def get_brand_by_id(self, brand_id: str) -> Optional[Dict[str, Any]]:
@@ -82,10 +90,18 @@ class SocialMediaDBService:
     async def create_template(self, template_data: Dict[str, Any]) -> str:
         """Create a new template"""
         db = await self.get_db()
-        template_data["created_at"] = datetime.utcnow()
-        template_data["updated_at"] = datetime.utcnow()
         
-        result = await db.templates.insert_one(template_data)
+        # Validate template data using Pydantic model
+        try:
+            template_model = Template(**template_data)
+            validated_data = template_model.dict(by_alias=True, exclude={"id"})
+        except Exception as e:
+            raise ValueError(f"Invalid template data: {str(e)}")
+        
+        validated_data["created_at"] = datetime.utcnow()
+        validated_data["updated_at"] = datetime.utcnow()
+        
+        result = await db.templates.insert_one(validated_data)
         return str(result.inserted_id)
     
     async def get_template_by_id(self, template_id: str) -> Optional[Dict[str, Any]]:
@@ -115,6 +131,12 @@ class SocialMediaDBService:
             {"$set": update_data}
         )
         return result.modified_count > 0
+    
+    async def delete_template(self, template_id: str) -> bool:
+        """Delete a template"""
+        db = await self.get_db()
+        result = await db.templates.delete_one({"_id": ObjectId(template_id)})
+        return result.deleted_count > 0
     
     # Scraped Post Operations
     async def save_scraped_post(self, post_data: Dict[str, Any]) -> str:
@@ -198,9 +220,17 @@ class SocialMediaDBService:
     async def create_competitor(self, competitor_data: Dict[str, Any]) -> str:
         """Create a new competitor entry"""
         db = await self.get_db()
-        competitor_data["created_at"] = datetime.utcnow()
         
-        result = await db.competitors.insert_one(competitor_data)
+        # Validate competitor data using Pydantic model
+        try:
+            competitor_model = Competitor(**competitor_data)
+            validated_data = competitor_model.dict(by_alias=True, exclude={"id"})
+        except Exception as e:
+            raise ValueError(f"Invalid competitor data: {str(e)}")
+        
+        validated_data["created_at"] = datetime.utcnow()
+        
+        result = await db.competitors.insert_one(validated_data)
         return str(result.inserted_id)
     
     async def get_competitor_by_id(self, competitor_id: str) -> Optional[Dict[str, Any]]:
@@ -227,6 +257,23 @@ class SocialMediaDBService:
         cursor = db.competitors.find(query)
         competitors = await cursor.to_list(length=None)
         return [competitor_helper(competitor) for competitor in competitors]
+    
+    async def update_competitor(self, competitor_id: str, update_data: Dict[str, Any]) -> bool:
+        """Update competitor data"""
+        db = await self.get_db()
+        update_data["updated_at"] = datetime.utcnow()
+        
+        result = await db.competitors.update_one(
+            {"_id": ObjectId(competitor_id)},
+            {"$set": update_data}
+        )
+        return result.modified_count > 0
+    
+    async def delete_competitor(self, competitor_id: str) -> bool:
+        """Delete a competitor"""
+        db = await self.get_db()
+        result = await db.competitors.delete_one({"_id": ObjectId(competitor_id)})
+        return result.deleted_count > 0
     
     async def update_competitor_metrics(
         self, 

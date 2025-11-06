@@ -79,6 +79,10 @@ class ChatModelConfig:
                     "chat_llm_model": "gemini",
                     "model_name": "gemini-2.5-flash"
                 },
+                "content_analyzer": {
+                    "chat_llm_model": "openai",
+                    "model_name": "gpt-4o-mini"
+                },
                 "social_media_manager": {
                     "chat_llm_model": "groq",
                     "model_name": "openai/gpt-oss-120b"

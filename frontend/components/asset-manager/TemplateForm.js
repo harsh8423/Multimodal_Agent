@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { socialMediaUtils } from '@/lib/api/socialMedia';
 
 export default function TemplateForm({ template, brands, onSubmit, onClose }) {
+  const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
     brand_id: '',
     name: '',
@@ -40,6 +41,39 @@ export default function TemplateForm({ template, brands, onSubmit, onClose }) {
 
   const isEditing = !!template;
 
+  const steps = [
+    {
+      id: 'basic',
+      title: 'Basic Info',
+      icon: '📝',
+      description: 'What type of template?'
+    },
+    {
+      id: 'structure',
+      title: 'Structure',
+      icon: '🏗️',
+      description: 'Define the template structure'
+    },
+    {
+      id: 'theme',
+      title: 'Theme',
+      icon: '🎨',
+      description: 'Choose colors and mood'
+    },
+    {
+      id: 'content',
+      title: 'Content',
+      icon: '📋',
+      description: 'Add hooks and placeholders'
+    },
+    {
+      id: 'references',
+      title: 'References',
+      icon: '📚',
+      description: 'Reference materials'
+    }
+  ];
+
   useEffect(() => {
     if (template) {
       setFormData({
@@ -75,7 +109,6 @@ export default function TemplateForm({ template, brands, onSubmit, onClose }) {
         const newData = { ...prev };
         let current = newData;
         
-        // Navigate to the parent object
         for (let i = 0; i < parts.length - 1; i++) {
           if (!current[parts[i]]) {
             current[parts[i]] = {};
@@ -83,7 +116,6 @@ export default function TemplateForm({ template, brands, onSubmit, onClose }) {
           current = current[parts[i]];
         }
         
-        // Set the final value
         current[parts[parts.length - 1]] = value;
         return newData;
       });
@@ -197,36 +229,6 @@ export default function TemplateForm({ template, brands, onSubmit, onClose }) {
     }));
   };
 
-  const handleSceneAdd = () => {
-    if (sceneInput.instructions) {
-      setFormData(prev => ({
-        ...prev,
-        structure: {
-          ...prev.structure,
-          scenes: [...(prev.structure?.scenes || []), { ...sceneInput }],
-        },
-      }));
-      setSceneInput({ 
-        scene_id: (prev.structure?.scenes?.length || 0) + 2, 
-        duration_sec: 5, 
-        instructions: '', 
-        visual_hints: [], 
-        audio_cue: '', 
-        hooks: [] 
-      });
-    }
-  };
-
-  const handleSceneRemove = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      structure: {
-        ...prev.structure,
-        scenes: (prev.structure?.scenes || []).filter((_, i) => i !== index),
-      },
-    }));
-  };
-
   const handleReferenceImageAdd = () => {
     if (referenceImageInput.trim()) {
       setFormData(prev => ({
@@ -291,160 +293,189 @@ export default function TemplateForm({ template, brands, onSubmit, onClose }) {
     }
   };
 
+  const nextStep = () => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
   const templateTypes = ['instagram_post', 'linkedin_post', 'reel', 'short', 'carousel', 'image_post'];
   const moods = ['professional', 'playful', 'exciting', 'calm', 'energetic', 'elegant', 'bold', 'minimal'];
   const commonAspects = ['1:1', '16:9', '9:16', '4:3', '3:4', '21:9'];
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-start justify-center p-4 pt-8">
-      <div className="relative w-full max-w-4xl bg-white rounded-xl shadow-2xl my-8">
-        {/* Fixed Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl z-10">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-bold text-gray-900">
-              {isEditing ? 'Edit Template' : 'Create New Template'}
-            </h3>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-200"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        
-        <div className="p-6">
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 0: // Basic Info
+        return (
+          <div className="space-y-8">
+            
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Brand</label>
-                <select
-                  value={formData.brand_id}
-                  onChange={(e) => handleInputChange('brand_id', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select a brand (optional)</option>
-                  {brands.map((brand) => (
-                    <option key={brand.id} value={brand.id}>
-                      {brand.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Template Type *</label>
-                <select
-                  required
-                  value={formData.type}
-                  onChange={(e) => handleInputChange('type', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {templateTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {socialMediaUtils.formatTemplateType(type)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Template Name *</label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter template name"
-              />
-            </div>
-
-            {/* Structure */}
-            <div className="border-t pt-6">
-              <h4 className="text-md font-medium text-gray-900 mb-4">Template Structure</h4>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Description *</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={formData.structure.description}
-                  onChange={(e) => handleInputChange('structure.description', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Describe what this template is for..."
-                />
-              </div>
-
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700">Description Prompt</label>
-                <textarea
-                  rows={2}
-                  value={formData.structure.description_prompt}
-                  onChange={(e) => handleInputChange('structure.description_prompt', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Prompt for generating captions..."
-                />
-              </div>
-            </div>
-
-            {/* Theme */}
-            <div className="border-t pt-6">
-              <h4 className="text-md font-medium text-gray-900 mb-4">Theme Settings</h4>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Mood</label>
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="transform hover:scale-105 transition-all duration-300">
+                  <label className="block text-lg font-bold text-purple-700 mb-3 flex items-center">
+                    <span className="text-2xl mr-2">🏢</span>
+                    Brand (Optional)
+                  </label>
                   <select
-                    value={formData.structure.theme.mood}
-                    onChange={(e) => handleInputChange('structure.theme.mood', e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.brand_id}
+                    onChange={(e) => handleInputChange('brand_id', e.target.value)}
+                    className="w-full px-6 py-4 bg-gradient-to-r from-pink-100 to-purple-100 border-4 border-purple-300 rounded-2xl text-purple-800 text-lg font-bold focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:border-yellow-400 transition-all duration-300 hover:scale-105 transform hover:skew-x-1"
                   >
-                    {moods.map((mood) => (
-                      <option key={mood} value={mood}>
-                        {mood.charAt(0).toUpperCase() + mood.slice(1)}
+                    <option value="">🎯 Select a brand (optional)</option>
+                    {brands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        🏢 {brand.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="transform hover:scale-105 transition-all duration-300">
+                  <label className="block text-lg font-bold text-purple-700 mb-3 flex items-center">
+                    <span className="text-2xl mr-2">📱</span>
+                    Template Type *
+                  </label>
+                  <select
+                    required
+                    value={formData.type}
+                    onChange={(e) => handleInputChange('type', e.target.value)}
+                    className="w-full px-6 py-4 bg-gradient-to-r from-blue-100 to-purple-100 border-4 border-blue-300 rounded-2xl text-blue-800 text-lg font-bold focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:border-yellow-400 transition-all duration-300 hover:scale-105 transform hover:skew-x-1"
+                  >
+                    {templateTypes.map((type) => (
+                      <option key={type} value={type}>
+                        📱 {socialMediaUtils.formatTemplateType(type)}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              {/* Color Palette */}
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700">Color Palette</label>
-                <div className="mt-1 flex space-x-2">
+              <div className="transform hover:scale-105 transition-all duration-300">
+                <label className="block text-lg font-bold text-purple-700 mb-3 flex items-center">
+                  <span className="text-2xl mr-2">✨</span>
+                  Template Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  className="w-full px-6 py-4 bg-gradient-to-r from-yellow-100 to-pink-100 border-4 border-yellow-300 rounded-2xl text-purple-800 text-lg font-bold focus:outline-none focus:ring-4 focus:ring-purple-400 focus:border-purple-400 transition-all duration-300 hover:scale-105 transform hover:skew-x-1"
+                  placeholder="🎨 Enter your amazing template name"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      case 1: // Structure
+        return (
+          <div className="space-y-8">
+            <div className="space-y-8">
+              <div className="transform hover:scale-105 transition-all duration-300">
+                <label className="block text-lg font-bold text-purple-700 mb-3 flex items-center">
+                  <span className="text-2xl mr-2">📖</span>
+                  Description *
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={formData.structure.description}
+                  onChange={(e) => handleInputChange('structure.description', e.target.value)}
+                  className="w-full px-6 py-4 bg-gradient-to-r from-green-100 to-blue-100 border-4 border-green-300 rounded-2xl text-purple-800 text-lg font-bold focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:border-yellow-400 transition-all duration-300 resize-none hover:scale-105 transform hover:skew-x-1"
+                  placeholder="🏗️ Describe what this template is for..."
+                />
+              </div>
+
+              <div className="transform hover:scale-105 transition-all duration-300">
+                <label className="block text-lg font-bold text-purple-700 mb-3 flex items-center">
+                  <span className="text-2xl mr-2">🤖</span>
+                  Description Prompt
+                </label>
+                <textarea
+                  rows={3}
+                  value={formData.structure.description_prompt}
+                  onChange={(e) => handleInputChange('structure.description_prompt', e.target.value)}
+                  className="w-full px-6 py-4 bg-gradient-to-r from-orange-100 to-pink-100 border-4 border-orange-300 rounded-2xl text-purple-800 text-lg font-bold focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:border-yellow-400 transition-all duration-300 resize-none hover:scale-105 transform hover:skew-x-1"
+                  placeholder="🤖 Prompt for generating captions..."
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      case 2: // Theme
+        return (
+          <div className="space-y-6 animate-slide-in">
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-4 animate-spin">🎨</div>
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">Style Your Template!</h3>
+              <p className="text-gray-600">Choose colors, mood, and aspect ratios</p>
+            </div>
+
+            <div className="space-y-6">
+              <div className="relative group">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                  <span className="text-xl mr-2">😊</span>
+                  Mood
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {moods.map((mood) => (
+                    <label key={mood} className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-300 cursor-pointer group">
+                      <input
+                        type="radio"
+                        name="mood"
+                        value={mood}
+                        checked={formData.structure.theme.mood === mood}
+                        onChange={(e) => handleInputChange('structure.theme.mood', e.target.value)}
+                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300"
+                      />
+                      <span className="ml-3 text-lg font-medium text-gray-700 group-hover:text-blue-700 capitalize">{mood}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="relative group">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                  <span className="text-xl mr-2">🌈</span>
+                  Color Palette
+                </label>
+                <div className="flex space-x-3">
                   <input
                     type="color"
                     value={colorInput}
                     onChange={(e) => setColorInput(e.target.value)}
-                    className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+                    className="w-16 h-12 border-2 border-gray-200 rounded-xl cursor-pointer hover:scale-110 transition-transform duration-300"
                   />
                   <button
                     type="button"
                     onClick={handleColorAdd}
-                    className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl hover:from-pink-600 hover:to-purple-600 transition-all duration-300 font-semibold hover:scale-105 shadow-lg"
                   >
-                    Add Color
+                    Add Color ✨
                   </button>
                 </div>
                 {formData.structure?.theme?.color_palette?.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     {formData.structure?.theme?.color_palette?.map((color, index) => (
                       <span
                         key={index}
-                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white"
+                        className="inline-flex items-center px-3 py-2 rounded-full text-sm font-medium text-white hover:scale-105 transition-transform duration-200"
                         style={{ backgroundColor: color }}
                       >
                         {color}
                         <button
                           type="button"
                           onClick={() => handleColorRemove(index)}
-                          className="ml-1 text-white hover:text-gray-200"
+                          className="ml-2 text-white hover:text-gray-200 transition-colors duration-200"
                         >
                           ×
                         </button>
@@ -454,14 +485,16 @@ export default function TemplateForm({ template, brands, onSubmit, onClose }) {
                 )}
               </div>
 
-              {/* Preferred Aspect Ratios */}
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700">Preferred Aspect Ratios</label>
-                <div className="mt-1 flex space-x-2">
+              <div className="relative group">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                  <span className="text-xl mr-2">📐</span>
+                  Preferred Aspect Ratios
+                </label>
+                <div className="flex space-x-3">
                   <select
                     value={aspectInput}
                     onChange={(e) => setAspectInput(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300 text-lg font-medium"
                   >
                     {commonAspects.map((aspect) => (
                       <option key={aspect} value={aspect}>
@@ -472,23 +505,23 @@ export default function TemplateForm({ template, brands, onSubmit, onClose }) {
                   <button
                     type="button"
                     onClick={handleAspectAdd}
-                    className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl hover:from-green-600 hover:to-blue-600 transition-all duration-300 font-semibold hover:scale-105 shadow-lg"
                   >
-                    Add Aspect
+                    Add Aspect ✨
                   </button>
                 </div>
                 {formData.structure?.theme?.preferred_aspect?.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     {formData.structure?.theme?.preferred_aspect?.map((aspect, index) => (
                       <span
                         key={index}
-                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                        className="inline-flex items-center px-3 py-2 rounded-full text-sm font-medium bg-gradient-to-r from-blue-100 to-green-100 text-blue-800 hover:scale-105 transition-transform duration-200"
                       >
                         {aspect}
                         <button
                           type="button"
                           onClick={() => handleAspectRemove(index)}
-                          className="ml-1 text-blue-600 hover:text-blue-800"
+                          className="ml-2 text-blue-600 hover:text-red-600 transition-colors duration-200"
                         >
                           ×
                         </button>
@@ -498,347 +531,357 @@ export default function TemplateForm({ template, brands, onSubmit, onClose }) {
                 )}
               </div>
             </div>
+          </div>
+        );
 
-            {/* Placeholders */}
-            <div className="border-t pt-6">
-              <h4 className="text-md font-medium text-gray-900 mb-4">Content Placeholders</h4>
-              
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  value={placeholderInput}
-                  onChange={(e) => setPlaceholderInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handlePlaceholderAdd())}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter placeholder name"
-                />
-                <button
-                  type="button"
-                  onClick={handlePlaceholderAdd}
-                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Add
-                </button>
-              </div>
-              {formData.structure.placeholders.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {formData.structure.placeholders.map((placeholder, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"
-                    >
-                      {placeholder}
-                      <button
-                        type="button"
-                        onClick={() => handlePlaceholderRemove(index)}
-                        className="ml-1 text-green-600 hover:text-green-800"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+      case 3: // Content
+        return (
+          <div className="space-y-6 animate-slide-in">
+            
 
-            {/* Hooks */}
-            <div className="border-t pt-6">
-              <h4 className="text-md font-medium text-gray-900 mb-4">Content Hooks</h4>
-              
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Position</label>
-                    <select
-                      value={hookInput.position}
-                      onChange={(e) => setHookInput(prev => ({ ...prev, position: e.target.value }))}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="start">Start</option>
-                      <option value="mid">Middle</option>
-                      <option value="end">End</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Example</label>
-                    <input
-                      type="text"
-                      value={hookInput.example}
-                      onChange={(e) => setHookInput(prev => ({ ...prev, example: e.target.value }))}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Hook example text"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Call to Action</label>
-                    <input
-                      type="text"
-                      value={hookInput.cta}
-                      onChange={(e) => setHookInput(prev => ({ ...prev, cta: e.target.value }))}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="CTA text"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleHookAdd}
-                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Add Hook
-                </button>
-              </div>
-              
-              {formData.structure?.hooks?.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  {formData.structure.hooks.map((hook, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                      <div>
-                        <span className="text-sm font-medium text-gray-900">{hook.position}</span>
-                        <p className="text-sm text-gray-600">{hook.example}</p>
-                        {hook.cta && <p className="text-xs text-blue-600">CTA: {hook.cta}</p>}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleHookRemove(index)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Scenes */}
-            <div className="border-t pt-6">
-              <h4 className="text-md font-medium text-gray-900 mb-4">Video Scenes</h4>
-              
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Scene ID</label>
-                    <input
-                      type="number"
-                      value={sceneInput.scene_id}
-                      onChange={(e) => setSceneInput(prev => ({ ...prev, scene_id: parseInt(e.target.value) || 1 }))}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      min="1"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Duration (seconds)</label>
-                    <input
-                      type="number"
-                      value={sceneInput.duration_sec}
-                      onChange={(e) => setSceneInput(prev => ({ ...prev, duration_sec: parseInt(e.target.value) || 5 }))}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      min="1"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Instructions</label>
-                  <textarea
-                    rows={3}
-                    value={sceneInput.instructions}
-                    onChange={(e) => setSceneInput(prev => ({ ...prev, instructions: e.target.value }))}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Describe what should happen in this scene..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Audio Cue</label>
+            <div className="space-y-6">
+              <div className="relative group">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                  <span className="text-xl mr-2">🔤</span>
+                  Content Placeholders
+                </label>
+                <div className="flex space-x-3">
                   <input
                     type="text"
-                    value={sceneInput.audio_cue}
-                    onChange={(e) => setSceneInput(prev => ({ ...prev, audio_cue: e.target.value }))}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Audio cue description"
+                    value={placeholderInput}
+                    onChange={(e) => setPlaceholderInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handlePlaceholderAdd())}
+                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300 text-lg font-medium"
+                    placeholder="Enter placeholder name"
                   />
+                  <button
+                    type="button"
+                    onClick={handlePlaceholderAdd}
+                    className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl hover:from-orange-600 hover:to-red-600 transition-all duration-300 font-semibold hover:scale-105 shadow-lg"
+                  >
+                    Add ✨
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSceneAdd}
-                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Add Scene
-                </button>
-              </div>
-              
-              {formData.structure?.scenes?.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  {formData.structure.scenes.map((scene, index) => (
-                    <div key={index} className="flex items-start justify-between p-3 bg-gray-50 rounded-md">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-gray-900">Scene {scene.scene_id}</span>
-                          <span className="text-xs text-gray-500">({scene.duration_sec}s)</span>
-                        </div>
-                        <p className="text-sm text-gray-600 mt-1">{scene.instructions}</p>
-                        {scene.audio_cue && <p className="text-xs text-blue-600 mt-1">Audio: {scene.audio_cue}</p>}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleSceneRemove(index)}
-                        className="text-red-600 hover:text-red-800 ml-2"
+                {formData.structure.placeholders.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {formData.structure.placeholders.map((placeholder, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-3 py-2 rounded-full text-sm font-medium bg-gradient-to-r from-green-100 to-blue-100 text-green-800 hover:scale-105 transition-transform duration-200"
                       >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                        {placeholder}
+                        <button
+                          type="button"
+                          onClick={() => handlePlaceholderRemove(index)}
+                          className="ml-2 text-green-600 hover:text-red-600 transition-colors duration-200"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            {/* References */}
-            <div className="border-t pt-6">
-              <h4 className="text-md font-medium text-gray-900 mb-4">Reference Materials</h4>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Reference Notes</label>
-                  <textarea
-                    rows={3}
-                    value={formData.references.notes}
-                    onChange={(e) => handleInputChange('references.notes', e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Add notes about reference materials..."
+              <div className="relative group">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                  <span className="text-xl mr-2">🎣</span>
+                  Content Hooks
+                </label>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Position</label>
+                      <select
+                        value={hookInput.position}
+                        onChange={(e) => setHookInput(prev => ({ ...prev, position: e.target.value }))}
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300 text-lg font-medium"
+                      >
+                        <option value="start">Start</option>
+                        <option value="mid">Middle</option>
+                        <option value="end">End</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Example</label>
+                      <input
+                        type="text"
+                        value={hookInput.example}
+                        onChange={(e) => setHookInput(prev => ({ ...prev, example: e.target.value }))}
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300 text-lg font-medium"
+                        placeholder="Hook example text"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Call to Action</label>
+                      <input
+                        type="text"
+                        value={hookInput.cta}
+                        onChange={(e) => setHookInput(prev => ({ ...prev, cta: e.target.value }))}
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300 text-lg font-medium"
+                        placeholder="CTA text"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleHookAdd}
+                    className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all duration-300 font-semibold hover:scale-105 shadow-lg"
+                  >
+                    Add Hook ✨
+                  </button>
+                </div>
+                
+                {formData.structure?.hooks?.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {formData.structure.hooks.map((hook, index) => (
+                      <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border-2 border-purple-200">
+                        <div>
+                          <span className="text-sm font-semibold text-purple-800">{hook.position}</span>
+                          <p className="text-sm text-gray-600">{hook.example}</p>
+                          {hook.cta && <p className="text-xs text-blue-600">CTA: {hook.cta}</p>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleHookRemove(index)}
+                          className="text-red-600 hover:text-red-800 transition-colors duration-200"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 4: // References
+        return (
+          <div className="space-y-6 animate-slide-in">
+
+            <div className="space-y-6">
+              <div className="relative group">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                  <span className="text-xl mr-2">📝</span>
+                  Reference Notes
+                </label>
+                <textarea
+                  rows={4}
+                  value={formData.references.notes}
+                  onChange={(e) => handleInputChange('references.notes', e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300 text-lg font-medium resize-none"
+                  placeholder="Add notes about reference materials..."
+                />
+              </div>
+
+              <div className="relative group">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                  <span className="text-xl mr-2">🖼️</span>
+                  Reference Image URLs
+                </label>
+                <div className="flex space-x-3">
+                  <input
+                    type="url"
+                    value={referenceImageInput}
+                    onChange={(e) => setReferenceImageInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleReferenceImageAdd())}
+                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300 text-lg font-medium"
+                    placeholder="Enter image URL"
                   />
+                  <button
+                    type="button"
+                    onClick={handleReferenceImageAdd}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all duration-300 font-semibold hover:scale-105 shadow-lg"
+                  >
+                    Add ✨
+                  </button>
                 </div>
-
-                {/* Reference Images */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Reference Image URLs</label>
-                  <div className="mt-1 flex space-x-2">
-                    <input
-                      type="url"
-                      value={referenceImageInput}
-                      onChange={(e) => setReferenceImageInput(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleReferenceImageAdd())}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter image URL"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleReferenceImageAdd}
-                      className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      Add
-                    </button>
+                {formData.references?.images?.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {formData.references.images.map((url, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-200">
+                        <span className="truncate text-sm font-medium text-blue-800">{url}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleReferenceImageRemove(index)}
+                          className="text-red-600 hover:text-red-800 ml-2 transition-colors duration-200"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  {formData.references?.images?.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {formData.references.images.map((url, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                          <span className="truncate">{url}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleReferenceImageRemove(index)}
-                            className="text-red-600 hover:text-red-800 ml-2"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                )}
+              </div>
 
-                {/* Reference Videos */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Reference Video URLs</label>
-                  <div className="mt-1 flex space-x-2">
-                    <input
-                      type="url"
-                      value={referenceVideoInput}
-                      onChange={(e) => setReferenceVideoInput(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleReferenceVideoAdd())}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter video URL"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleReferenceVideoAdd}
-                      className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  {formData.references?.videos?.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {formData.references.videos.map((url, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                          <span className="truncate">{url}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleReferenceVideoRemove(index)}
-                            className="text-red-600 hover:text-red-800 ml-2"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              <div className="relative group">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                  <span className="text-xl mr-2">🎥</span>
+                  Reference Video URLs
+                </label>
+                <div className="flex space-x-3">
+                  <input
+                    type="url"
+                    value={referenceVideoInput}
+                    onChange={(e) => setReferenceVideoInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleReferenceVideoAdd())}
+                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300 text-lg font-medium"
+                    placeholder="Enter video URL"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleReferenceVideoAdd}
+                    className="px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all duration-300 font-semibold hover:scale-105 shadow-lg"
+                  >
+                    Add ✨
+                  </button>
                 </div>
+                {formData.references?.videos?.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {formData.references.videos.map((url, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-xl border border-red-200">
+                        <span className="truncate text-sm font-medium text-red-800">{url}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleReferenceVideoRemove(index)}
+                          className="text-red-600 hover:text-red-800 ml-2 transition-colors duration-200"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
+          </div>
+        );
 
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="w-full bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100">
+      <form onSubmit={handleSubmit}>
+        {/* Header */}
+        <div className="bg-gradient-to-r from-pink-400 via-purple-500 to-blue-500 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-2 animate-bounce">
+                {isEditing ? '🎨 Edit Template' : '✨ Create New Template'}
+              </h2>
+              <p className="text-pink-100 text-sm">Step {currentStep + 1} of {steps.length}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-3 text-white hover:bg-white/20 rounded-full transition-all duration-300 hover:scale-110 hover:rotate-12"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="mt-6">
+            <div className="flex items-center space-x-3">
+              {steps.map((step, index) => (
+                <div key={step.id} className="flex items-center">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 transform hover:scale-110 ${
+                    index <= currentStep 
+                      ? 'bg-yellow-400 text-purple-800 shadow-lg animate-pulse' 
+                      : 'bg-white/30 text-white'
+                  }`}>
+                    {index < currentStep ? '🎉' : index + 1}
                   </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800">Error</h3>
-                    <div className="mt-2 text-sm text-red-700">
-                      <p>{error}</p>
-                    </div>
-                  </div>
+                  {index < steps.length - 1 && (
+                    <div className={`w-12 h-2 mx-3 rounded-full transition-all duration-500 ${
+                      index < currentStep ? 'bg-yellow-400 shadow-lg' : 'bg-white/30'
+                    }`}></div>
+                  )}
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
+          </div>
+        </div>
 
-            {/* Form Actions */}
-            <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+        {/* Navigation Buttons - Moved to Top */}
+        <div className="bg-white/80 backdrop-blur-sm p-4 border-b-4 border-purple-200">
+          <div className="flex justify-between items-center">
+            <button
+              type="button"
+              onClick={prevStep}
+              disabled={currentStep === 0}
+              className="px-6 py-3 text-purple-700 bg-gradient-to-r from-pink-200 to-purple-200 border-4 border-purple-300 rounded-2xl hover:from-pink-300 hover:to-purple-300 hover:scale-105 hover:rotate-1 transition-all duration-300 font-bold disabled:opacity-50 disabled:cursor-not-allowed transform hover:skew-x-1"
+            >
+              ← Previous
+            </button>
+
+            <div className="flex space-x-4">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-6 py-3 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200"
+                className="px-6 py-3 text-gray-700 bg-gradient-to-r from-gray-200 to-gray-300 border-4 border-gray-400 rounded-2xl hover:from-gray-300 hover:to-gray-400 hover:scale-105 hover:rotate-1 transition-all duration-300 font-bold transform hover:skew-x-1"
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-6 py-3 text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center space-x-2"
-              >
-                {loading ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>{isEditing ? 'Update Template' : 'Create Template'}</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                  </>
-                )}
-              </button>
+              
+              {currentStep < steps.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className="px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white border-4 border-blue-600 rounded-2xl hover:from-blue-600 hover:to-purple-700 hover:scale-110 hover:rotate-1 transition-all duration-300 font-bold shadow-lg transform hover:skew-x-1 animate-pulse"
+                >
+                  Next → 🚀
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-8 py-3 bg-gradient-to-r from-green-500 to-blue-600 text-white border-4 border-green-600 rounded-2xl hover:from-green-600 hover:to-blue-700 hover:scale-110 hover:rotate-1 transition-all duration-300 font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transform hover:skew-x-1"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{isEditing ? 'Update Template' : 'Create Template'}</span>
+                      <span className="animate-bounce">🎉</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
-          </form>
+          </div>
         </div>
-      </div>
+
+        {/* Content - Scrollable */}
+        <div className="p-8 pb-20">
+          {renderStepContent()}
+
+          {/* Error Message */}
+          {error && (
+            <div className="mt-8 bg-red-100 border-4 border-red-300 rounded-2xl p-6 animate-shake">
+              <div className="flex items-center">
+                <div className="text-3xl mr-4 animate-bounce">🚨</div>
+                <div>
+                  <h3 className="text-lg font-bold text-red-800">Oops! Something went wrong</h3>
+                  <p className="text-red-700 font-medium">{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </form>
     </div>
   );
 }

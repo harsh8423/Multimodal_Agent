@@ -11,6 +11,7 @@ from agents.social_media_search_agent import social_media_search_agent
 from agents.media_activist import media_activist
 from agents.copy_writer import copy_writer
 from agents.todo_planner import todo_planner
+from agents.content_analyzer import content_analyzer
 from utils.session_memory import SessionContext
 from config.chat_model_config import get_final_config
 
@@ -18,7 +19,7 @@ DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 
 async def call_agent(agent_name: str, query: str, model_name: Optional[str] = None, chat_llm_model: Optional[str] = None,
                      registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
-                     user_metadata: Optional[Dict] = None, user_image_path: Optional[str] = None) -> Any:
+                     user_metadata: Optional[Dict] = None, user_image_path: Optional[str] = None, analysis_context: Optional[Dict] = None) -> Any:
     """
     Dispatch helper that receives agent_name and query and calls the corresponding agent function.
 
@@ -63,6 +64,9 @@ async def call_agent(agent_name: str, query: str, model_name: Optional[str] = No
     if agent_name == "asset_agent":
         result = await func(query, model_name=final_model_name, chat_llm_model=final_chat_llm_model, registry_path=str(registry_path), session_context=session_context, 
                            user_id=user_id, user_metadata=user_metadata, user_image_path=user_image_path)
+    elif agent_name == "todo_planner" and analysis_context is not None:
+        result = await func(query, model_name=final_model_name, chat_llm_model=final_chat_llm_model, registry_path=str(registry_path), session_context=session_context,
+                           user_metadata=user_metadata, user_image_path=user_image_path, analysis_context=analysis_context)
     else:
         result = await func(query, model_name=final_model_name, chat_llm_model=final_chat_llm_model, registry_path=str(registry_path), session_context=session_context,
                            user_metadata=user_metadata, user_image_path=user_image_path)

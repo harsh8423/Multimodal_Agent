@@ -2,16 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { templatesAPI, brandsAPI, socialMediaUtils } from '@/lib/api/socialMedia';
-import TemplateForm from './TemplateForm';
 import TemplateCard from './TemplateCard';
 
-export default function TemplatesTab({ onUpdate, brandId }) {
+export default function TemplatesTab({ onUpdate, brandId, onFormOpen }) {
   const [templates, setTemplates] = useState([]);
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
@@ -64,28 +61,13 @@ export default function TemplatesTab({ onUpdate, brandId }) {
     }
   };
 
-  const handleCreate = async (templateData) => {
-    try {
-      await templatesAPI.create(templateData);
-      setShowForm(false);
-      loadTemplates();
-      onUpdate?.();
-    } catch (err) {
-      console.error('Failed to create template:', err);
-      throw err;
-    }
+  const handleCreate = () => {
+    console.log('TemplatesTab handleCreate called');
+    onFormOpen?.('template');
   };
 
-  const handleUpdate = async (templateId, updateData) => {
-    try {
-      await templatesAPI.update(templateId, updateData);
-      setEditingTemplate(null);
-      loadTemplates();
-      onUpdate?.();
-    } catch (err) {
-      console.error('Failed to update template:', err);
-      throw err;
-    }
+  const handleEdit = (template) => {
+    onFormOpen?.('template', template);
   };
 
   const handleDelete = async (templateId) => {
@@ -161,7 +143,7 @@ export default function TemplatesTab({ onUpdate, brandId }) {
           </p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={handleCreate}
           className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -281,7 +263,7 @@ export default function TemplatesTab({ onUpdate, brandId }) {
               </p>
               <div className="mt-6">
                 <button
-                  onClick={() => setShowForm(true)}
+                  onClick={handleCreate}
                   className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -299,7 +281,7 @@ export default function TemplatesTab({ onUpdate, brandId }) {
                     key={template.id}
                     template={template}
                     brands={brands}
-                    onEdit={setEditingTemplate}
+                    onEdit={handleEdit}
                     onDelete={handleDelete}
                     onArchive={handleArchive}
                     onActivate={handleActivate}
@@ -382,18 +364,6 @@ export default function TemplatesTab({ onUpdate, brandId }) {
         </>
       )}
 
-      {/* Template Form Modal */}
-      {(showForm || editingTemplate) && (
-        <TemplateForm
-          template={editingTemplate}
-          brands={brands}
-          onSubmit={editingTemplate ? handleUpdate : handleCreate}
-          onClose={() => {
-            setShowForm(false);
-            setEditingTemplate(null);
-          }}
-        />
-      )}
     </div>
   );
 }

@@ -1,13 +1,13 @@
 """
 Minimax Audio Clone Tool
-Simplified implementation for voice cloning using Minimax API
+Simplified synchronous implementation for voice cloning using Minimax API
 """
 
 import requests
 import json
 import os
-import time
 import tempfile
+import binascii
 from typing import Dict, List, Optional, Tuple, Any
 from dotenv import load_dotenv
 import sys
@@ -17,21 +17,36 @@ from upload_cloudinary import upload_to_cloudinary
 load_dotenv()
 
 
-def create_minimax_client(api_key: Optional[str] = None) -> Dict[str, str]:
+def get_api_key(api_key: Optional[str] = None) -> str:
     """
-    Create Minimax API client configuration.
+    Get Minimax API key from parameter or environment.
     
     Args:
         api_key: Minimax API key (if not provided, will use environment variable)
         
     Returns:
-        Dictionary containing headers for API requests
+        API key string
+        
+    Raises:
+        ValueError: If API key is not found
     """
     if not api_key:
         api_key = os.environ.get("MINIMAX_API_KEY")
         if not api_key:
             raise ValueError("MINIMAX_API_KEY not found in environment variables")
+    return api_key
+
+
+def create_headers(api_key: str) -> Dict[str, str]:
+    """
+    Create request headers for Minimax API.
     
+    Args:
+        api_key: Minimax API key
+        
+    Returns:
+        Dictionary containing headers for API requests
+    """
     return {
         'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
@@ -57,74 +72,107 @@ def validate_text_input(text: str) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-def submit_minimax_task(headers: Dict[str, str], payload: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
+def hex_to_mp3(hex_data: str) -> bytes:
     """
-    Submit TTS task to Minimax API.
+    Convert hex string to MP3 bytes.
     
     Args:
-        headers: Request headers
-        payload: Request payload
+        hex_data: Hex string containing audio data
         
     Returns:
-        Tuple of (success: bool, response_data: dict)
+        MP3 audio bytes
+        
+    Raises:
+        ValueError: If hex data is invalid
     """
-    url = "https://api.minimax.io/v1/t2a_async_v2"
-    
     try:
-        print(f"Submitting payload: {json.dumps(payload, indent=2)}")
-        response = requests.post(
-            url,
-            headers=headers,
-            data=json.dumps(payload),
-            timeout=30
-        )
-        
-        print(f"Response status: {response.status_code}")
-        print(f"Response headers: {dict(response.headers)}")
-        
-        response_data = response.json()
-        print(f"Response data: {response_data}")
-        
-        # Check for API errors
-        if response_data.get("base_resp", {}).get("status_code") != 0:
-            return False, {
-                "error": f"API Error: {response_data.get('base_resp', {}).get('status_msg', 'Unknown error')}",
-                "status_code": response_data.get("base_resp", {}).get("status_code"),
-                "response": response_data
-            }
-        
-        response.raise_for_status()
-        return True, response_data
-        
-    except requests.exceptions.RequestException as e:
-        return False, {"error": str(e)}
-    except json.JSONDecodeError as e:
-        return False, {"error": f"Invalid JSON response: {str(e)}"}
+        # Remove any whitespace and convert hex to bytes
+        hex_clean = hex_data.replace(' ', '').replace('\n', '').replace('\r', '')
+        return binascii.unhexlify(hex_clean)
+    except (ValueError, TypeError) as e:
+        raise ValueError(f"Invalid hex data: {str(e)}")
 
 
-def generate_minimax_audio(
+def save_temp_mp3(audio_bytes: bytes) -> str:
+    """
+    Save audio bytes to temporary MP3 file.
+    
+    Args:
+        audio_bytes: MP3 audio bytes
+        
+    Returns:
+        Path to temporary file
+        
+    Raises:
+        IOError: If file cannot be created
+    """
+    try:
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+        temp_file.write(audio_bytes)
+        temp_file.close()
+        return temp_file.name
+    except Exception as e:
+        raise IOError(f"Failed to create temporary file: {str(e)}")
+
+
+def upload_audio_to_cloudinary(file_path: str, cloudinary_options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Upload audio file to Cloudinary.
+    
+    Args:
+        file_path: Path to audio file
+        cloudinary_options: Options for Cloudinary upload
+        
+    Returns:
+        Cloudinary upload result
+        
+    Raises:
+        Exception: If upload fails
+    """
+    try:
+        result = upload_to_cloudinary(file_path, cloudinary_options or {})
+        return result
+    except Exception as e:
+        raise Exception(f"Cloudinary upload failed: {str(e)}")
+
+
+def cleanup_temp_file(file_path: str) -> None:
+    """
+    Clean up temporary file.
+    
+    Args:
+        file_path: Path to temporary file
+    """
+    try:
+        if os.path.exists(file_path):
+            os.unlink(file_path)
+    except Exception:
+        pass  # Ignore cleanup errors
+
+
+def generate_audio_sync(
     text: str,
+    voice_id: str = "moss_audio_d1efbcbb-a84b-11f0-acd3-2a7238f4ad26",
+    voice_setting: Optional[Dict[str, Any]] = None,
+    audio_setting: Optional[Dict[str, Any]] = None,
+    voice_modify: Optional[Dict[str, Any]] = None,
+    pronunciation_dict: Optional[Dict[str, List[str]]] = None,
     api_key: Optional[str] = None,
-    voice_id: str = "English_expressive_narrator",
-    file_format: str = "mp3",
-    pronunciation_mappings: Optional[List[str]] = None,
-    sound_effects: Optional[str] = None,
-    max_wait_time: int = 300,
-    poll_interval: int = 10,
     cloudinary_options: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
-    Generate audio using Minimax API, poll for completion, download, and upload to Cloudinary.
+    Unified function to generate audio using synchronous Minimax API.
+    Takes voice_id, text, voice settings, audio settings, voice modify, 
+    converts hex audio to mp3 and uploads to Cloudinary.
     
     Args:
         text: Text to convert to speech
-        api_key: Minimax API key
         voice_id: Voice ID to use
-        file_format: Audio format (mp3, wav, etc.)
-        pronunciation_mappings: Custom pronunciation mappings
-        sound_effects: Sound effects to apply
-        max_wait_time: Maximum time to wait for task completion
-        poll_interval: Interval between status polls
+        voice_setting: Voice settings (speed, vol, pitch)
+        audio_setting: Audio settings (sample_rate, bitrate, format, channel)
+        voice_modify: Voice modification settings (pitch, intensity, timbre, sound_effects)
+        pronunciation_dict: Pronunciation dictionary with tone mappings
+        api_key: Minimax API key
         cloudinary_options: Options for Cloudinary upload
         
     Returns:
@@ -140,132 +188,138 @@ def generate_minimax_audio(
         }
     
     try:
-        # Step 1: Generate the audio task
-        headers = create_minimax_client(api_key)
+        # Get API key and create headers
+        api_key = get_api_key(api_key)
+        headers = create_headers(api_key)
         
-        # Build payload exactly like the working example
+        # Build payload with defaults
         payload = {
             "model": "speech-2.5-hd-preview",
             "text": text,
+            "stream": False,
             "language_boost": "auto",
-            "voice_setting": {
+            "output_format": "hex",
+            "voice_setting": voice_setting or {
                 "voice_id": voice_id,
-                "speed": 1,
-                "vol": 1,
-                "pitch": 1
+                "speed": 1.0,
+                "vol": 1.0,
+                "pitch": 0
             },
-            "audio_setting": {
-                "audio_sample_rate": 32000,
+            "audio_setting": audio_setting or {
+                "sample_rate": 32000,
                 "bitrate": 128000,
-                "format": file_format,
-                "channel": 2
+                "format": "mp3",
+                "channel": 1
             }
         }
         
-        # Add optional pronunciation dictionary
-        if pronunciation_mappings:
-            payload["pronunciation_dict"] = {
-                "tone": pronunciation_mappings
-            }
-        
         # Add optional voice modification
-        if sound_effects:
-            payload["voice_modify"] = {
-                "pitch": 0,
-                "intensity": 0,
-                "timbre": 0,
-                "sound_effects": sound_effects
-            }
+        if voice_modify:
+            payload["voice_modify"] = voice_modify
         
-        # Submit task
-        success, response_data = submit_minimax_task(headers, payload)
-        
-        if not success:
-            return {
-                "status": "failed",
-                "url": None,
-                "msg": response_data.get("error", "Failed to submit task")
-            }
-        
-        task_id = response_data.get("task_id")
-        if not task_id:
-            return {
-                "status": "failed",
-                "url": None,
-                "msg": "No task ID returned from generation request"
-            }
-        
-        # Step 2: Poll for task completion
-        print(f"Polling task {task_id} for completion...")
-        polling_result = poll_minimax_task_status(
-            task_id=task_id,
-            api_key=api_key,
-            max_wait_time=max_wait_time,
-            poll_interval=poll_interval
+        # Make synchronous API call
+        url = "https://api.minimax.io/v1/t2a_v2"
+        response = requests.post(
+            url,
+            headers=headers,
+            data=json.dumps(payload),
+            timeout=60
         )
         
-        if not polling_result.get("success"):
+        response.raise_for_status()
+        response_data = response.json()
+        
+        # Check for API errors
+        if response_data.get("base_resp", {}).get("status_code") != 0:
             return {
                 "status": "failed",
                 "url": None,
-                "msg": polling_result.get("error", "Task polling failed")
+                "msg": f"API Error: {response_data.get('base_resp', {}).get('status_msg', 'Unknown error')}"
             }
         
-        audio_url = polling_result.get("audio_url")
-        if not audio_url:
+        # Get hex audio data - the data field contains a dict with audio field
+        data_field = response_data.get("data")
+        if not data_field:
             return {
                 "status": "failed",
                 "url": None,
-                "msg": "No audio URL returned from completed task"
+                "msg": f"No data field returned from API. Response keys: {list(response_data.keys())}"
             }
         
-        # Step 3: Download the audio
-        print(f"Downloading audio from: {audio_url}")
-        download_success, download_result = download_audio_from_url(audio_url)
-        
-        if not download_success:
+        # Extract hex audio string from data.audio
+        hex_audio = data_field.get("audio")
+        if not hex_audio:
             return {
                 "status": "failed",
                 "url": None,
-                "msg": f"Failed to download audio: {download_result}"
+                "msg": f"No audio field in data. Data keys: {list(data_field.keys()) if isinstance(data_field, dict) else 'Not a dict'}"
             }
         
-        temp_file_path = download_result
+        # Check if hex_audio is a string (hex data)
+        if not isinstance(hex_audio, str):
+            return {
+                "status": "failed",
+                "url": None,
+                "msg": f"Audio data is not a string. Type: {type(hex_audio)}"
+            }
+        
+        # Convert hex to MP3 bytes
+        try:
+            audio_bytes = hex_to_mp3(hex_audio)
+        except ValueError as e:
+            return {
+                "status": "failed",
+                "url": None,
+                "msg": f"Failed to convert hex audio: {str(e)}"
+            }
+        
+        # Save to temporary file
+        try:
+            temp_file_path = save_temp_mp3(audio_bytes)
+        except IOError as e:
+            return {
+                "status": "failed",
+                "url": None,
+                "msg": f"Failed to save temporary file: {str(e)}"
+            }
         
         try:
-            # Step 4: Upload to Cloudinary
-            print(f"Uploading audio to Cloudinary...")
-            cloudinary_result = upload_to_cloudinary(
-                temp_file_path,
-                cloudinary_options or {}
-            )
+            # Upload to Cloudinary
+            cloudinary_result = upload_audio_to_cloudinary(temp_file_path, cloudinary_options)
             
-            # Step 5: Clean up temporary file
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
+            # Clean up temporary file
+            cleanup_temp_file(temp_file_path)
             
             return {
                 "status": "success",
                 "url": cloudinary_result.get("secure_url"),
                 "msg": None,
-                "task_id": task_id,
                 "voice_used": voice_id,
                 "text_length": len(text),
-                "file_format": file_format,
-                "original_audio_url": audio_url
+                "audio_size": len(audio_bytes)
             }
             
         except Exception as e:
             # Clean up temporary file on error
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-            
+            cleanup_temp_file(temp_file_path)
             return {
                 "status": "failed",
                 "url": None,
                 "msg": f"Failed to upload to Cloudinary: {str(e)}"
             }
         
+    except requests.exceptions.RequestException as e:
+        return {
+            "status": "failed",
+            "url": None,
+            "msg": f"API request failed: {str(e)}"
+        }
+    except json.JSONDecodeError as e:
+        return {
+            "status": "failed",
+            "url": None,
+            "msg": f"Invalid JSON response: {str(e)}"
+        }
     except Exception as e:
         return {
             "status": "failed",
@@ -274,198 +328,10 @@ def generate_minimax_audio(
         }
 
 
-# Voice mapping for easy access (using valid Minimax voice IDs)
-AVAILABLE_VOICES = {
-    "narrator": "English_expressive_narrator",
-    "female": "English_female_narrator",
-    "male": "English_male_narrator",
-    "child": "English_child_voice",
-    "elderly": "English_elderly_voice"
-}
 
 
-def get_voice_id(voice_key: str) -> str:
-    """
-    Get voice ID from key.
-    
-    Args:
-        voice_key: Voice key (narrator, female, male, child, elderly)
-        
-    Returns:
-        Actual voice ID for API
-    """
-    return AVAILABLE_VOICES.get(voice_key.lower(), "English_expressive_narrator")
-
-
-def generate_with_voice_key(text: str, voice_key: str, api_key: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Generate audio using voice key for convenience.
-    
-    Args:
-        text: Text to convert
-        voice_key: Voice key (narrator, female, male, child, elderly)
-        api_key: Minimax API key
-        
-    Returns:
-        Dictionary containing result
-    """
-    voice_id = get_voice_id(voice_key)
-    return generate_minimax_audio(text, api_key, voice_id)
-
-
-def query_minimax_task_status(task_id: str, api_key: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Query the status of a Minimax TTS task.
-    
-    Args:
-        task_id: Task ID to query
-        api_key: Minimax API key
-        
-    Returns:
-        Dictionary containing task status information
-    """
-    if not api_key:
-        api_key = os.environ.get("MINIMAX_API_KEY")
-        if not api_key:
-            return {
-                "success": False,
-                "error": "MINIMAX_API_KEY not found in environment variables"
-            }
-    
-    if not task_id:
-        return {
-            "success": False,
-            "error": "Task ID is required"
-        }
-    
-    try:
-        url = "https://api.minimax.io/v1/t2a_async_v2/query"
-        headers = create_minimax_client(api_key)
-        params = {"task_id": task_id}
-        
-        response = requests.get(url, headers=headers, params=params, timeout=30)
-        response.raise_for_status()
-        
-        result = response.json()
-        
-        # Check for API errors
-        if result.get("base_resp", {}).get("status_code") != 0:
-            return {
-                "success": False,
-                "error": f"API Error: {result.get('base_resp', {}).get('status_msg', 'Unknown error')}",
-                "status_code": result.get("base_resp", {}).get("status_code"),
-                "response": result
-            }
-        
-        return {
-            "success": True,
-            "data": result,
-            "status": result.get("status", "unknown"),
-            "audio_url": result.get("audio_url")
-        }
-        
-    except requests.exceptions.RequestException as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-    except json.JSONDecodeError as e:
-        return {
-            "success": False,
-            "error": f"Invalid JSON response: {str(e)}"
-        }
-
-
-def poll_minimax_task_status(task_id: str, api_key: Optional[str] = None, max_wait_time: int = 300, poll_interval: int = 10) -> Dict[str, Any]:
-    """
-    Poll Minimax task status until completion or failure.
-    
-    Args:
-        task_id: Task ID to poll
-        api_key: Minimax API key
-        max_wait_time: Maximum time to wait in seconds (default 5 minutes)
-        poll_interval: Interval between polls in seconds (default 10 seconds)
-        
-    Returns:
-        Dictionary containing final task status and result
-    """
-    start_time = time.time()
-    
-    while time.time() - start_time < max_wait_time:
-        status_result = query_minimax_task_status(task_id, api_key)
-        
-        if not status_result.get("success"):
-            return status_result
-        
-        # Check if task is completed
-        task_status = status_result.get("status", "").lower()
-        
-        if task_status == "success" or task_status == "completed":
-            return {
-                "success": True,
-                "status": "completed",
-                "data": status_result.get("data"),
-                "audio_url": status_result.get("audio_url")
-            }
-        elif task_status == "failed" or task_status == "error":
-            return {
-                "success": False,
-                "status": "failed",
-                "error": status_result.get("error", "Task failed"),
-                "data": status_result.get("data")
-            }
-        elif task_status in ["pending", "processing", "running"]:
-            print(f"Task {task_id} is {task_status}, waiting {poll_interval} seconds...")
-            time.sleep(poll_interval)
-        else:
-            # Unknown status, continue polling
-            print(f"Unknown task status: {task_status}, continuing to poll...")
-            time.sleep(poll_interval)
-    
-    return {
-        "success": False,
-        "status": "timeout",
-        "error": f"Task did not complete within {max_wait_time} seconds",
-        "task_id": task_id
-    }
-
-
-def download_audio_from_url(audio_url: str, temp_dir: Optional[str] = None) -> Tuple[bool, Optional[str]]:
-    """
-    Download audio from URL to temporary file.
-    
-    Args:
-        audio_url: URL of the audio to download
-        temp_dir: Temporary directory path (optional)
-        
-    Returns:
-        Tuple of (success: bool, file_path: Optional[str])
-    """
-    try:
-        response = requests.get(audio_url, timeout=30)
-        response.raise_for_status()
-        
-        # Create temporary file
-        if temp_dir:
-            os.makedirs(temp_dir, exist_ok=True)
-            temp_file = tempfile.NamedTemporaryFile(delete=False, dir=temp_dir, suffix='.mp3')
-        else:
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-        
-        temp_file.write(response.content)
-        temp_file.close()
-        
-        return True, temp_file.name
-        
-    except Exception as e:
-        return False, str(e)
-
-
-
-
-# Example usage and testing functions
 # Wrapper function for tool_router compatibility
-def minimax_audio_clone(text: str, voice_sample_url: str, voice_id: Optional[str] = None, 
+def minimax_audio_clone(text: str, voice_sample_url: Optional[str] = None, voice_id: Optional[str] = None, 
                        quality: str = "high", upload_to_cloudinary: bool = True, api_key: Optional[str] = None) -> Dict[str, Any]:
     """
     Wrapper function for Minimax audio cloning that matches the expected tool interface.
@@ -481,46 +347,59 @@ def minimax_audio_clone(text: str, voice_sample_url: str, voice_id: Optional[str
     Returns:
         Dictionary with generation result
     """
-    # Call the main generation function
-    return generate_minimax_audio(
+    # Call the unified audio generation function
+    return generate_audio_sync(
         text=text,
-        voice_sample_url=voice_sample_url,
-        voice_id=voice_id,
-        quality=quality,
-        upload_to_cloudinary=upload_to_cloudinary,
+        voice_id=voice_id or "English_expressive_narrator",
         api_key=api_key
     )
+
 
 def test_minimax_audio():
     """
     Test function for Minimax audio generation.
     """
-    test_text = "Hello, this is a test of the Minimax audio generation system."
+    test_text = "Sahil either go to sleep or study"
     
-    # Test simplified generation
-    result = generate_minimax_audio(test_text)
-    print("Simplified generation result:", result)
+    # Test synchronous generation
+    result = generate_audio_sync(test_text)
+    print("Synchronous generation result:", result)
     
     if result["status"] == "success":
         print(f"✅ Audio generated successfully: {result['url']}")
         print(f"   Voice: {result['voice_used']}")
-        print(f"   Format: {result['file_format']}")
+        print(f"   Audio size: {result['audio_size']} bytes")
     else:
         print(f"❌ Error: {result['msg']}")
     
-    # Test with pronunciation mappings
-    result2 = generate_minimax_audio(
-        "Omg, this is amazing!",
-        pronunciation_mappings=["Omg/Oh my god"]
-    )
-    print("With pronunciation mappings:", result2)
+    # Test with custom settings
+    custom_settings = {
+        "voice_setting": {
+            "voice_id": "English_expressive_narrator",
+            "speed": 1.2,
+            "vol": 1.0,
+            "pitch": 0
+        },
+        "voice_modify": {
+            "pitch": 0,
+            "intensity": 0,
+            "timbre": 0,
+            "sound_effects": "spacious_echo"
+        }
+    }
     
-    if result2["status"] == "success":
-        print(f"✅ Audio with pronunciation generated: {result2['url']}")
-    else:
-        print(f"❌ Error: {result2['msg']}")
+    # result2 = generate_audio_sync(
+    #     text="This is a test with custom voice settings and sound effects.",
+    #     **custom_settings
+    # )
+    # print("Custom settings result:", result2)
     
-    return result, result2
+    # if result2["status"] == "success":
+    #     print(f"✅ Audio with custom settings generated: {result2['url']}")
+    # else:
+    #     print(f"❌ Error: {result2['msg']}")
+    
+    return result
 
 
 if __name__ == "__main__":

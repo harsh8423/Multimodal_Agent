@@ -2,16 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { competitorsAPI, brandsAPI, socialMediaUtils } from '@/lib/api/socialMedia';
-import CompetitorForm from './CompetitorForm';
 import CompetitorCard from './CompetitorCard';
 
-export default function CompetitorsTab({ onUpdate, brandId }) {
+export default function CompetitorsTab({ onUpdate, brandId, onFormOpen }) {
   const [competitors, setCompetitors] = useState([]);
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editingCompetitor, setEditingCompetitor] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -62,28 +59,13 @@ export default function CompetitorsTab({ onUpdate, brandId }) {
     }
   };
 
-  const handleCreate = async (competitorData) => {
-    try {
-      await competitorsAPI.create(competitorData);
-      setShowForm(false);
-      loadCompetitors();
-      onUpdate?.();
-    } catch (err) {
-      console.error('Failed to create competitor:', err);
-      throw err;
-    }
+  const handleCreate = () => {
+    console.log('CompetitorsTab handleCreate called');
+    onFormOpen?.('competitor');
   };
 
-  const handleUpdate = async (competitorId, updateData) => {
-    try {
-      await competitorsAPI.update(competitorId, updateData);
-      setEditingCompetitor(null);
-      loadCompetitors();
-      onUpdate?.();
-    } catch (err) {
-      console.error('Failed to update competitor:', err);
-      throw err;
-    }
+  const handleEdit = (competitor) => {
+    onFormOpen?.('competitor', competitor);
   };
 
   const handleDelete = async (competitorId) => {
@@ -152,7 +134,7 @@ export default function CompetitorsTab({ onUpdate, brandId }) {
           </p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={handleCreate}
           className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -252,7 +234,7 @@ export default function CompetitorsTab({ onUpdate, brandId }) {
               </p>
               <div className="mt-6">
                 <button
-                  onClick={() => setShowForm(true)}
+                  onClick={handleCreate}
                   className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -270,7 +252,7 @@ export default function CompetitorsTab({ onUpdate, brandId }) {
                     key={competitor.id}
                     competitor={competitor}
                     brands={brands}
-                    onEdit={setEditingCompetitor}
+                    onEdit={handleEdit}
                     onDelete={handleDelete}
                     onScrape={handleScrape}
                     onDuplicate={handleDuplicate}
@@ -352,18 +334,6 @@ export default function CompetitorsTab({ onUpdate, brandId }) {
         </>
       )}
 
-      {/* Competitor Form Modal */}
-      {(showForm || editingCompetitor) && (
-        <CompetitorForm
-          competitor={editingCompetitor}
-          brands={brands}
-          onSubmit={editingCompetitor ? handleUpdate : handleCreate}
-          onClose={() => {
-            setShowForm(false);
-            setEditingCompetitor(null);
-          }}
-        />
-      )}
     </div>
   );
 }

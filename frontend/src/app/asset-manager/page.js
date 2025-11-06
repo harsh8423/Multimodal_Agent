@@ -13,6 +13,8 @@ export default function AssetManagerPage() {
   const [selectedSection, setSelectedSection] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeForm, setActiveForm] = useState(null);
 
   const handleBrandSelect = (brand) => {
     setSelectedBrand(brand);
@@ -23,29 +25,44 @@ export default function AssetManagerPage() {
     setSelectedSection(section);
   };
 
-  const handleDataUpdate = async () => {
-    // This will be called when data needs to be refreshed
-    // The individual components will handle their own data loading
-    console.log('Data update requested');
+  const handleDataUpdate = async (formType = null) => {
+    if (formType) {
+      // Open form in main content area
+      setActiveForm(formType);
+      setSelectedSection(null); // Clear section when opening form
+    } else {
+      // This will be called when data needs to be refreshed
+      // The individual components will handle their own data loading
+      console.log('Data update requested');
+    }
+  };
+
+  const handleFormClose = () => {
+    setActiveForm(null);
   };
 
   return (
-    <div className="h-screen flex bg-gray-100 overflow-hidden">
-      {/* Left Sidebar */}
+    <div className="min-h-screen bg-gray-100">
+      {/* Left Sidebar - Fixed */}
       <AssetManagerSidebar
         selectedBrand={selectedBrand}
         onBrandSelect={handleBrandSelect}
         selectedSection={selectedSection}
         onSectionSelect={handleSectionSelect}
         onDataUpdate={handleDataUpdate}
+        onCollapseChange={setSidebarCollapsed}
       />
 
-      {/* Main Content Area */}
-      <div className="flex-1">
+      {/* Main Content Area - Scrollable with dynamic left margin */}
+      <div className={`min-h-screen overflow-y-auto transition-all duration-500 ${
+        sidebarCollapsed ? 'ml-16' : 'ml-72'
+      }`}>
         <AssetManagerContent
           selectedBrand={selectedBrand}
           selectedSection={selectedSection}
           onDataUpdate={handleDataUpdate}
+          activeForm={activeForm}
+          onFormClose={handleFormClose}
         />
       </div>
 

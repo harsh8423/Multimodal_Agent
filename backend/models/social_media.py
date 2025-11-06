@@ -82,6 +82,8 @@ class Brand(BaseModel):
     theme: BrandTheme = Field(..., description="Brand visual theme")
     details: BrandDetails = Field(..., description="Brand business details")
     default_posting_settings: DefaultPostingSettings = Field(default_factory=DefaultPostingSettings)
+    voice_name: Optional[str] = Field(None, description="Brand voice name")
+    voice_id: Optional[str] = Field(None, description="Brand voice ID")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Extensible metadata")
@@ -263,11 +265,26 @@ def brand_helper(brand) -> dict:
             "name": brand["name"],
             "slug": brand["slug"],
             "description": brand["description"],
-            "theme": brand["theme"],
-            "details": brand["details"],
-            "default_posting_settings": brand["default_posting_settings"],
-            "created_at": brand["created_at"],
-            "updated_at": brand["updated_at"],
+            "theme": brand.get("theme", {
+                "primary_color": "#3B82F6",
+                "secondary_color": "#1E40AF",
+                "font": "Inter",
+                "logo_url": None
+            }),
+            "details": brand.get("details", {
+                "website": None,
+                "industry": None,
+                "audience": []
+            }),
+            "default_posting_settings": brand.get("default_posting_settings", {
+                "timezone": "UTC",
+                "default_platforms": ["instagram", "linkedin"],
+                "post_approval_required": False
+            }),
+            "voice_name": brand.get("voice_name"),
+            "voice_id": brand.get("voice_id"),
+            "created_at": brand.get("created_at", datetime.utcnow()),
+            "updated_at": brand.get("updated_at", datetime.utcnow()),
             "metadata": brand.get("metadata", {})
         }
     return None
@@ -281,14 +298,19 @@ def template_helper(template) -> dict:
             "user_id": template["user_id"],
             "brand_id": template.get("brand_id"),
             "name": template["name"],
-            "type": template["type"],
-            "version": template["version"],
-            "status": template["status"],
-            "structure": template["structure"],
+            "type": template.get("type", "instagram_post"),
+            "version": template.get("version", 1),
+            "status": template.get("status", "active"),
+            "structure": template.get("structure", {
+                "content": "",
+                "media_placeholders": [],
+                "hashtags": [],
+                "call_to_action": ""
+            }),
             "references": template.get("references", {}),
             "assets": template.get("assets", []),
-            "created_at": template["created_at"],
-            "updated_at": template["updated_at"],
+            "created_at": template.get("created_at", datetime.utcnow()),
+            "updated_at": template.get("updated_at", datetime.utcnow()),
             "metadata": template.get("metadata", {})
         }
     return None
@@ -322,12 +344,12 @@ def competitor_helper(competitor) -> dict:
             "user_id": competitor["user_id"],
             "brand_id": competitor.get("brand_id"),
             "name": competitor["name"],
-            "platform": competitor["platform"],
-            "handle": competitor["handle"],
-            "profile_url": competitor["profile_url"],
+            "platform": competitor.get("platform", "instagram"),
+            "handle": competitor.get("handle", ""),
+            "profile_url": competitor.get("profile_url", ""),
             "metrics": competitor.get("metrics", {}),
             "scrape_config": competitor.get("scrape_config", {}),
             "metadata": competitor.get("metadata", {}),
-            "created_at": competitor["created_at"]
+            "created_at": competitor.get("created_at", datetime.utcnow())
         }
     return None

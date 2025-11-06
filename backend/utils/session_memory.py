@@ -167,6 +167,9 @@ class SessionContext:
         # Todo planner state - tracks if todo list exists for this chat
         self.todo_planner_state: bool = False
         
+        # Store the current todo_id for this chat session
+        self.current_todo_id: Optional[str] = None
+        
         # WebSocket reference (set by SessionManager)
         self.websocket: Optional[Any] = None
         
@@ -372,6 +375,19 @@ class SessionContext:
                         )
                         self.agent_memories["social_media_manager"]._entries.append(entry)
             
+            # Hydrate current_todo_id from most recent active todo
+            try:
+                from tools.todo_manager import get_todo_manager
+                todo_manager = await get_todo_manager()
+                chat_todos = await todo_manager.get_chat_todos(chat_id, status="active")
+                if chat_todos:
+                    self.current_todo_id = str(chat_todos[0]["_id"])
+                    print(f"[DEBUG] Hydrated current_todo_id: {self.current_todo_id}")
+                else:
+                    print(f"[DEBUG] No active todos found for chat {chat_id}")
+            except Exception as e:
+                logger.warning(f"Failed to hydrate current_todo_id: {e}")
+            
             self.last_active = datetime.now(timezone.utc)
             logger.info(f"Hydrated memories for chat {chat_id}")
             print(f"[DEBUG] Memory hydration completed for chat {chat_id}")
@@ -420,6 +436,14 @@ class SessionContext:
     def get_todo_planner_state(self) -> bool:
         """Get the current todo planner state"""
         return self.todo_planner_state
+    
+    def set_current_todo_id(self, todo_id: str) -> None:
+        """Set the current todo_id for this session"""
+        self.current_todo_id = todo_id
+    
+    def get_current_todo_id(self) -> Optional[str]:
+        """Get the current todo_id for this session"""
+        return self.current_todo_id
     
     async def check_recent_todo_list(self, chat_id: str) -> Optional[Dict[str, Any]]:
         """Check for recent active todo list in the chat"""
@@ -499,7 +523,8 @@ class SessionContext:
             "agent_memories": {name: memory.to_dict() for name, memory in self.agent_memories.items()},
             "logs": [log.to_dict() for log in self.log_queue],
             "metadata": self.metadata,
-            "todo_planner_state": self.todo_planner_state
+            "todo_planner_state": self.todo_planner_state,
+            "current_todo_id": self.current_todo_id
         }
     
     @classmethod
@@ -514,6 +539,7 @@ class SessionContext:
         ctx.last_active = datetime.fromisoformat(data["last_active"])
         ctx.metadata = data.get("metadata", {})
         ctx.todo_planner_state = data.get("todo_planner_state", False)
+        ctx.current_todo_id = data.get("current_todo_id")
         
         # Restore agent memories
         for name, memory_data in data.get("agent_memories", {}).items():

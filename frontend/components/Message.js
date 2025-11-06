@@ -13,14 +13,26 @@ import {
   FileImage, 
   Settings,
   Clock,
-  Sparkles
+  Sparkles,
+  ChevronUp,
+  ChevronDown,
+  CheckCircle,
+  Play,
+  Circle,
+  XCircle,
+  Send,
+  Plus,
+  Mic,
+  MicOff,
+  StopCircle,
+  Zap
 } from 'lucide-react';
 import { cn, formatTime, copyToClipboard, getAgentColor, getInitials, getAvatarColor } from '@/lib/utils';
 import { processMessageMedia, getMediaDisplayConfig } from '@/lib/media-utils';
 import TodoDisplay from './TodoDisplay';
 
 const Message = ({ 
-  message, 
+  message: messageContent, 
   isUser = false, 
   agent = null, 
   timestamp = null, 
@@ -30,9 +42,53 @@ const Message = ({
   mediaType = null,
   isNotification = false,
   notificationType = 'info',
-  metadata = null
+  metadata = null,
+  // ChatInput overlay props
+  showChatInputOverlay = false,
+  activeTodo = null,
+  todoExpanded = false,
+  onTodoToggle = () => {},
+  nanoStream = [],
+  nanoExpanded = false,
+  onNanoToggle = () => {},
+  // Input box props
+  onSendMessage = () => {},
+  placeholder = "Type your message...",
+  disabled = false,
+  onStopStreaming = () => {}
 }) => {
   const [copied, setCopied] = React.useState(false);
+  const [message, setMessage] = React.useState('');
+  const [isRecording, setIsRecording] = React.useState(false);
+  const [showAttachments, setShowAttachments] = React.useState(false);
+  const textareaRef = React.useRef(null);
+
+  // Input handlers
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (message.trim() && !disabled && onSendMessage) {
+      onSendMessage(message.trim());
+      setMessage('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      setIsRecording(false);
+    } else {
+      setIsRecording(true);
+    }
+  };
 
   // Check if URL is a Cloudinary URL
   const isCloudinaryUrl = (url) => {
@@ -40,7 +96,7 @@ const Message = ({
   };
 
   // Process message media using the new utility
-  const mediaInfo = processMessageMedia(message, metadata);
+  const mediaInfo = processMessageMedia(messageContent, metadata);
   const mediaItems = mediaInfo.mediaItems;
 
   // Replace bare URLs in text with markdown links labeled "Link" while preserving existing links and code blocks
@@ -61,10 +117,10 @@ const Message = ({
     return transformed.join('');
   };
 
-  const renderedMessage = typeof message === 'string' ? linkifyMessage(message) : String(message);
+  const renderedMessage = typeof messageContent === 'string' ? linkifyMessage(messageContent) : String(messageContent);
 
   const handleCopy = async () => {
-    const success = await copyToClipboard(message);
+    const success = await copyToClipboard(messageContent);
     if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -210,7 +266,7 @@ const Message = ({
   };
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-8 relative">
       <div className="max-w-4xl mx-auto">
         {/* Message Header */}
         <div className="flex items-center justify-start mb-4">
@@ -398,7 +454,7 @@ const Message = ({
 
             {/* Message Content */}
             {/* Hide message content if it's raw JSON and we have todo data to display */}
-            {!(metadata?.todo_data && typeof message === 'string' && message.includes('"success": true') && message.includes('"todo_data"')) && (
+                {!(metadata?.todo_data && typeof messageContent === 'string' && messageContent.includes('"success": true') && messageContent.includes('"todo_data"')) && (
               <div
                 className={cn(
                   // Base prose container (common)
@@ -476,6 +532,7 @@ const Message = ({
           )}
         </div>
       </div>
+
     </div>
   );
 };

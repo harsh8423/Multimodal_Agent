@@ -3,18 +3,20 @@
 Asset CRUD Operations Tool for Asset Agent
 
 This tool provides CRUD (Create, Read, Update, Delete) operations for
-brands, competitors, templates, and scraped posts through the existing API routes.
+brands, competitors, templates, and scraped posts through direct database access.
 """
 
 import json
 import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-import httpx
+import sys
+import os
 
+# Add the backend directory to the path to import services
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-# Base API configuration
-API_BASE_URL = "http://localhost:8000"
+from services.social_media_db import SocialMediaDBService
 
 
 async def create_brand(user_id: str, brand_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -32,25 +34,19 @@ async def create_brand(user_id: str, brand_data: Dict[str, Any]) -> Dict[str, An
         # Add user_id to brand data
         brand_data["user_id"] = user_id
         
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/brands/",
-                json=brand_data,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "data": response.json(),
-                    "message": "Brand created successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to create brand: {response.text}",
-                    "status_code": response.status_code
-                }
+        # Use database service directly
+        db_service = SocialMediaDBService()
+        brand_id = await db_service.create_brand(brand_data)
+        
+        # Get the created brand to return
+        created_brand = await db_service.get_brand_by_id(brand_id)
+        
+        return {
+            "success": True,
+            "data": created_brand,
+            "brand_id": brand_id,
+            "message": "Brand created successfully"
+        }
                 
     except Exception as e:
         return {
@@ -72,25 +68,23 @@ async def update_brand(user_id: str, brand_id: str, update_data: Dict[str, Any])
         Dict[str, Any]: Updated brand data or error information
     """
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.put(
-                f"{API_BASE_URL}/api/brands/{brand_id}",
-                json=update_data,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "data": response.json(),
-                    "message": "Brand updated successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to update brand: {response.text}",
-                    "status_code": response.status_code
-                }
+        # Use database service directly
+        db_service = SocialMediaDBService()
+        
+        # Add updated_at timestamp
+        update_data["updated_at"] = datetime.utcnow()
+        
+        # Update the brand
+        await db_service.update_brand(brand_id, update_data)
+        
+        # Get the updated brand to return
+        updated_brand = await db_service.get_brand_by_id(brand_id)
+        
+        return {
+            "success": True,
+            "data": updated_brand,
+            "message": "Brand updated successfully"
+        }
                 
     except Exception as e:
         return {
@@ -111,20 +105,14 @@ async def delete_brand(user_id: str, brand_id: str) -> Dict[str, Any]:
         Dict[str, Any]: Deletion result or error information
     """
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.delete(f"{API_BASE_URL}/api/brands/{brand_id}")
-            
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "message": "Brand deleted successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to delete brand: {response.text}",
-                    "status_code": response.status_code
-                }
+        # Use database service directly
+        db_service = SocialMediaDBService()
+        await db_service.delete_brand(brand_id)
+        
+        return {
+            "success": True,
+            "message": "Brand deleted successfully"
+        }
                 
     except Exception as e:
         return {
@@ -148,25 +136,19 @@ async def create_competitor(user_id: str, competitor_data: Dict[str, Any]) -> Di
         # Add user_id to competitor data
         competitor_data["user_id"] = user_id
         
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/competitors/",
-                json=competitor_data,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "data": response.json(),
-                    "message": "Competitor created successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to create competitor: {response.text}",
-                    "status_code": response.status_code
-                }
+        # Use database service directly
+        db_service = SocialMediaDBService()
+        competitor_id = await db_service.create_competitor(competitor_data)
+        
+        # Get the created competitor to return
+        created_competitor = await db_service.get_competitor_by_id(competitor_id)
+        
+        return {
+            "success": True,
+            "data": created_competitor,
+            "competitor_id": competitor_id,
+            "message": "Competitor created successfully"
+        }
                 
     except Exception as e:
         return {
@@ -188,25 +170,23 @@ async def update_competitor(user_id: str, competitor_id: str, update_data: Dict[
         Dict[str, Any]: Updated competitor data or error information
     """
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.put(
-                f"{API_BASE_URL}/api/competitors/{competitor_id}",
-                json=update_data,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "data": response.json(),
-                    "message": "Competitor updated successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to update competitor: {response.text}",
-                    "status_code": response.status_code
-                }
+        # Use database service directly
+        db_service = SocialMediaDBService()
+        
+        # Add updated_at timestamp
+        update_data["updated_at"] = datetime.utcnow()
+        
+        # Update the competitor
+        await db_service.update_competitor(competitor_id, update_data)
+        
+        # Get the updated competitor to return
+        updated_competitor = await db_service.get_competitor_by_id(competitor_id)
+        
+        return {
+            "success": True,
+            "data": updated_competitor,
+            "message": "Competitor updated successfully"
+        }
                 
     except Exception as e:
         return {
@@ -227,20 +207,14 @@ async def delete_competitor(user_id: str, competitor_id: str) -> Dict[str, Any]:
         Dict[str, Any]: Deletion result or error information
     """
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.delete(f"{API_BASE_URL}/api/competitors/{competitor_id}")
-            
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "message": "Competitor deleted successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to delete competitor: {response.text}",
-                    "status_code": response.status_code
-                }
+        # Use database service directly
+        db_service = SocialMediaDBService()
+        await db_service.delete_competitor(competitor_id)
+        
+        return {
+            "success": True,
+            "message": "Competitor deleted successfully"
+        }
                 
     except Exception as e:
         return {
@@ -264,25 +238,19 @@ async def create_template(user_id: str, template_data: Dict[str, Any]) -> Dict[s
         # Add user_id to template data
         template_data["user_id"] = user_id
         
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/templates/",
-                json=template_data,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "data": response.json(),
-                    "message": "Template created successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to create template: {response.text}",
-                    "status_code": response.status_code
-                }
+        # Use database service directly
+        db_service = SocialMediaDBService()
+        template_id = await db_service.create_template(template_data)
+        
+        # Get the created template to return
+        created_template = await db_service.get_template_by_id(template_id)
+        
+        return {
+            "success": True,
+            "data": created_template,
+            "template_id": template_id,
+            "message": "Template created successfully"
+        }
                 
     except Exception as e:
         return {
@@ -304,25 +272,23 @@ async def update_template(user_id: str, template_id: str, update_data: Dict[str,
         Dict[str, Any]: Updated template data or error information
     """
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.put(
-                f"{API_BASE_URL}/api/templates/{template_id}",
-                json=update_data,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "data": response.json(),
-                    "message": "Template updated successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to update template: {response.text}",
-                    "status_code": response.status_code
-                }
+        # Use database service directly
+        db_service = SocialMediaDBService()
+        
+        # Add updated_at timestamp
+        update_data["updated_at"] = datetime.utcnow()
+        
+        # Update the template
+        await db_service.update_template(template_id, update_data)
+        
+        # Get the updated template to return
+        updated_template = await db_service.get_template_by_id(template_id)
+        
+        return {
+            "success": True,
+            "data": updated_template,
+            "message": "Template updated successfully"
+        }
                 
     except Exception as e:
         return {
@@ -343,20 +309,14 @@ async def delete_template(user_id: str, template_id: str) -> Dict[str, Any]:
         Dict[str, Any]: Deletion result or error information
     """
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.delete(f"{API_BASE_URL}/api/templates/{template_id}")
-            
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "message": "Template deleted successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to delete template: {response.text}",
-                    "status_code": response.status_code
-                }
+        # Use database service directly
+        db_service = SocialMediaDBService()
+        await db_service.delete_template(template_id)
+        
+        return {
+            "success": True,
+            "message": "Template deleted successfully"
+        }
                 
     except Exception as e:
         return {
@@ -441,58 +401,3 @@ async def perform_bulk_scraping(user_id: str, scraping_requests: List[Dict[str, 
             "error": f"Error performing bulk scraping: {str(e)}"
         }
 
-
-# Synchronous wrappers for compatibility with existing tool router
-def create_brand_sync(user_id: str, brand_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Synchronous wrapper for create_brand"""
-    return asyncio.run(create_brand(user_id, brand_data))
-
-
-def update_brand_sync(user_id: str, brand_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Synchronous wrapper for update_brand"""
-    return asyncio.run(update_brand(user_id, brand_id, update_data))
-
-
-def delete_brand_sync(user_id: str, brand_id: str) -> Dict[str, Any]:
-    """Synchronous wrapper for delete_brand"""
-    return asyncio.run(delete_brand(user_id, brand_id))
-
-
-def create_competitor_sync(user_id: str, competitor_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Synchronous wrapper for create_competitor"""
-    return asyncio.run(create_competitor(user_id, competitor_data))
-
-
-def update_competitor_sync(user_id: str, competitor_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Synchronous wrapper for update_competitor"""
-    return asyncio.run(update_competitor(user_id, competitor_id, update_data))
-
-
-def delete_competitor_sync(user_id: str, competitor_id: str) -> Dict[str, Any]:
-    """Synchronous wrapper for delete_competitor"""
-    return asyncio.run(delete_competitor(user_id, competitor_id))
-
-
-def create_template_sync(user_id: str, template_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Synchronous wrapper for create_template"""
-    return asyncio.run(create_template(user_id, template_data))
-
-
-def update_template_sync(user_id: str, template_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Synchronous wrapper for update_template"""
-    return asyncio.run(update_template(user_id, template_id, update_data))
-
-
-def delete_template_sync(user_id: str, template_id: str) -> Dict[str, Any]:
-    """Synchronous wrapper for delete_template"""
-    return asyncio.run(delete_template(user_id, template_id))
-
-
-def scrape_competitor_data_sync(user_id: str, competitor_id: str, limit: int = 10) -> Dict[str, Any]:
-    """Synchronous wrapper for scrape_competitor_data"""
-    return asyncio.run(scrape_competitor_data(user_id, competitor_id, limit))
-
-
-def perform_bulk_scraping_sync(user_id: str, scraping_requests: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Synchronous wrapper for perform_bulk_scraping"""
-    return asyncio.run(perform_bulk_scraping(user_id, scraping_requests))

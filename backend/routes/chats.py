@@ -47,17 +47,21 @@ async def get_chat_history(
     
     chats = await store.get_user_chats(user.id, limit)
     
-    # Return simplified chat info
-    return [
-        {
+    # Return simplified chat info with ObjectId serialization
+    def serialize_chat(chat):
+        serialized = {
             "chat_id": chat["chat_id"],
             "title": chat.get("title", "Untitled Chat"),
             "created_at": chat["created_at"],
             "last_active": chat["last_active"],
             "message_count": chat.get("message_count", 0)
         }
-        for chat in chats
-    ]
+        # Add chat document ID if present
+        if "_id" in chat:
+            serialized["doc_id"] = str(chat["_id"])
+        return serialized
+    
+    return [serialize_chat(chat) for chat in chats]
 
 
 @router.post("/create")
@@ -96,8 +100,9 @@ async def get_chat_messages(
     
     messages = await store.get_chat_messages(chat_id, limit)
     
-    return [
-        {
+    # Convert ObjectId to string for serialization
+    def serialize_message(msg):
+        serialized = {
             "timestamp": msg["timestamp"],
             "role": msg["role"],
             "agent": msg.get("agent"),
@@ -105,8 +110,12 @@ async def get_chat_messages(
             "message_type": msg.get("message_type", "final_message"),
             "metadata": msg.get("meta", {})
         }
-        for msg in messages
-    ]
+        # Add message ID if present
+        if "_id" in msg:
+            serialized["message_id"] = str(msg["_id"])
+        return serialized
+    
+    return [serialize_message(msg) for msg in messages]
 
 
 @router.get("/{chat_id}/details")
@@ -127,7 +136,8 @@ async def get_chat_details(
     messages = await store.get_chat_messages(chat_id, 1000)  # Get all messages for count
     message_count = len(messages)
     
-    return {
+    # Serialize chat details with ObjectId handling
+    details = {
         "chat_id": chat["chat_id"],
         "title": chat.get("title", "Untitled Chat"),
         "created_at": chat["created_at"],
@@ -135,6 +145,12 @@ async def get_chat_details(
         "metadata": chat.get("meta", {}),
         "message_count": message_count
     }
+    
+    # Add chat document ID if present
+    if "_id" in chat:
+        details["doc_id"] = str(chat["_id"])
+    
+    return details
 
 
 @router.delete("/{chat_id}")

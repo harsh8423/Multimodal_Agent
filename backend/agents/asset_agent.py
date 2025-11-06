@@ -1,19 +1,64 @@
 
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List
 from pathlib import Path
 from utils.build_prompts import build_system_prompt
 from utils.utility import chat_model_router, _normalize_model_output
 from utils.tool_router import tool_router
-from utils.session_memory import SessionContext
-from utils.mongo_store import save_chat_message
 from config.chat_model_config import get_final_config
 
 DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 
+# Global temporary conversation history (session-scoped)
+_conversation_history: Dict[str, List[Dict[str, str]]] = {}
+
+def _get_conversation_context(session_id: str, max_messages: int = 10) -> str:
+    """Get conversation context for LLM from temporary memory"""
+    if session_id not in _conversation_history:
+        return ""
+    
+    history = _conversation_history[session_id]
+    if not history:
+        return ""
+    
+    # Get the last max_messages
+    recent_history = history[-max_messages:]
+    
+    context_parts = []
+    for msg in recent_history:
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+        context_parts.append(f"{role.capitalize()}: {content}")
+    
+    return "Recent conversation:\n" + "\n".join(context_parts)
+
+def _add_to_conversation(session_id: str, role: str, content: str):
+    """Add message to temporary conversation history"""
+    if session_id not in _conversation_history:
+        _conversation_history[session_id] = []
+    
+    _conversation_history[session_id].append({
+        "role": role,
+        "content": content,
+        "timestamp": __import__("datetime").datetime.utcnow().isoformat()
+    })
+    
+    # Keep only last 20 messages to prevent memory bloat
+    if len(_conversation_history[session_id]) > 20:
+        _conversation_history[session_id] = _conversation_history[session_id][-20:]
+
+def _clear_conversation(session_id: str):
+    """Clear conversation history for a specific session"""
+    if session_id in _conversation_history:
+        del _conversation_history[session_id]
+
+def _get_conversation_stats() -> Dict[str, int]:
+    """Get statistics about conversation history (for debugging)"""
+    return {session_id: len(history) for session_id, history in _conversation_history.items()}
+
 async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_model: Optional[str] = None,
-                      registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
-                      max_iterations: int = 5, user_id: Optional[str] = None, 
-                      user_metadata: Optional[Dict] = None, user_image_path: Optional[str] = None) -> Any:
+                      registry_path: Optional[str] = None, max_iterations: int = 5, user_id: Optional[str] = None, 
+                      user_metadata: Optional[Dict] = None, user_image_path: Optional[str] = None, 
+                      session_id: Optional[str] = None) -> Any:
     """
     Asset agent for managing and retrieving user data including brands, competitors, scraped posts, and templates.
     Uses flexible function-based tools to handle various data retrieval and multi-task operations.
@@ -24,81 +69,11 @@ async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_mod
     # Use provided parameters or fall back to config
     final_model_name = model_name or config["model_name"]
     final_chat_llm_model = chat_llm_model or config["chat_llm_model"]
-    
-    # Extract user_id from session context if not provided
-    if not user_id and session_context:
-        user_id = getattr(session_context, 'user_id', None)
 
     if registry_path is None:
         registry_path = Path(__file__).parent.parent / DEFAULT_REGISTRY_FILENAME
     else:
         registry_path = Path(registry_path)
-
-    # Get asset agent memory context if available
-    asset_memory_context = ""
-    chat_history_context = ""
-    if session_context:
-        asset_memory = await session_context.get_agent_memory("asset_agent")
-        asset_memory_context = await asset_memory.get_context_string()
-        
-        # Get chat conversation history
-        if session_context.chat_id:
-            from utils.mongo_store import get_chat_messages
-            chat_messages = await get_chat_messages(session_context.chat_id, limit=20)
-            if chat_messages:
-                chat_history_parts = []
-                for msg in chat_messages[-10:]:  # Last 10 messages
-                    role = msg.get("role", "unknown")
-                    content = msg.get("content", "")
-                    agent = msg.get("agent", "")
-                    timestamp = msg.get("timestamp", "")
-
-                    # Skip old control frames accidentally stored as user content (e.g., chat_id-only)
-                    try:
-                        if isinstance(content, str) and content.strip().startswith("{"):
-                            import json as _json
-                            parsed = _json.loads(content)
-                            if isinstance(parsed, dict) and set(parsed.keys()) <= {"chat_id", "type"}:
-                                continue
-                    except Exception:
-                        pass
-
-                    if role == "user":
-                        chat_history_parts.append(f"User: {content}")
-                    elif role == "assistant" and agent == "asset_agent":
-                        chat_history_parts.append(f"Assistant (asset_agent): {content}")
-                
-                if chat_history_parts:
-                    chat_history_context = "Recent conversation:\n" + "\n".join(chat_history_parts)
-        
-        # Add current query to memory using new chat-scoped system
-        memory_metadata = {"timestamp": None, "query_type": "asset"}
-        
-        # Add user metadata to memory metadata if provided
-        if user_metadata:
-            memory_metadata["user_metadata"] = user_metadata
-        if user_image_path:
-            memory_metadata["image_path"] = user_image_path
-        
-        await session_context.append_and_persist_memory(
-            "asset_agent",
-            f"Asset query: {query}",
-            memory_metadata
-        )
-        
-        # Also save metadata separately for future reference
-        if user_metadata:
-            await session_context.append_and_persist_memory(
-                "asset_agent",
-                f"User metadata context: {json.dumps(user_metadata)}",
-                {"context_type": "user_metadata", "timestamp": None}
-            )
-        if user_image_path:
-            await session_context.append_and_persist_memory(
-                "asset_agent",
-                f"User provided image: {user_image_path}",
-                {"context_type": "user_asset", "timestamp": None}
-            )
 
     system_prompt = build_system_prompt("asset_agent", str(registry_path),
                                         extra_instructions="{place_holder}")
@@ -118,38 +93,22 @@ async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_mod
     
     if user_image_path:
         enhanced_query += f"\n\nUser provided image saved at: {user_image_path}"
-    
-    # Add memory context to system prompt here: if available
-    if asset_memory_context:
-        system_prompt += f"\n\n{asset_memory_context}"
-    
-    # Add chat history context to system prompt if available
-    if chat_history_context:
-        system_prompt += f"\n\n{chat_history_context}"
+
+    # Add conversation context if session_id is provided
+    conversation_context = ""
+    if session_id:
+        conversation_context = _get_conversation_context(session_id)
+        if conversation_context:
+            system_prompt += f"\n\n{conversation_context}"
+        
+        # Add current user query to conversation history
+        _add_to_conversation(session_id, "user", query)
 
     # Print system prompt as requested
     print(system_prompt)
 
-    # Log model call
-    if session_context:
-        # Save model call decision to memory
-        await session_context.append_and_persist_memory(
-            "asset_agent",
-            f"Model call decision: Processing asset query",
-            {"phase": "analysis", "query": query[:100], "agent_type": "asset"}
-        )
-
-        raw = await chat_model_router(system_prompt, enhanced_query, final_chat_llm_model, final_model_name)
+    raw = await chat_model_router(system_prompt, enhanced_query, final_chat_llm_model, final_model_name)
     normalized = await _normalize_model_output(raw)
-
-    # Log model response
-    if session_context:
-        # Save model response to memory
-        await session_context.append_and_persist_memory(
-            "asset_agent",
-            f"Model analysis response: {str(normalized)[:200]}...",
-            {"phase": "analysis", "response_type": "model_analysis", "agent_type": "asset"}
-        )
 
     print("=== asset_agent initial response ===")
     print(normalized)
@@ -172,32 +131,35 @@ async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_mod
 
             if not needs_tool:
                 print(f"=== ASSET_AGENT: No tool required, returning response ===")
-                if session_context:
-                    await session_context.append_and_persist_memory(
-                        "asset_agent",
-                        f"No tool required decision: Direct asset response",
-                        {"phase": "decision", "decision_type": "no_tool", "query": query[:100]}
-                    )
-                    await session_context.append_and_persist_memory(
-                        "asset_agent",
-                        f"Direct response: {str(last_normalized)[:200]}...",
-                        {"response_type": "direct", "used_tool": None}
-                    )
                 if isinstance(agent_state, dict):
                     print(f"=== ASSET_AGENT: Returning agent_state dict: {agent_state} ===")
-                    print(f"=== ASSET_AGENT: FINAL RETURN TO SOCIAL MEDIA MANAGER: {agent_state} ===")
+                    print(f"=== ASSET_AGENT: FINAL RETURN: {agent_state} ===")
+                    
+                    # Add assistant response to conversation history
+                    if session_id:
+                        response_text = agent_state.get("text", str(agent_state))
+                        _add_to_conversation(session_id, "assistant", response_text)
+                    
                     return agent_state
                 
                 print("=== ASSET_AGENT: direct response ===")
                 print(last_normalized)
                 print("=== ASSET_AGENT: end direct response ===")
+                
+                # Add assistant response to conversation history
+                if session_id:
+                    _add_to_conversation(session_id, "assistant", str(last_normalized))
+                
                 return {"text": str(last_normalized)}
 
             if iteration >= max_iterations:
                 warning_msg = f"Max iterations ({max_iterations}) reached in asset_agent; returning best-effort response."
                 print(warning_msg)
-                if session_context:
-                    await session_context.send_nano("warning", warning_msg)
+                
+                # Add assistant response to conversation history
+                if session_id:
+                    _add_to_conversation(session_id, "assistant", str(last_normalized))
+                
                 return {"text": str(last_normalized)}
 
             tool_name = agent_state.get("tool_name")
@@ -210,19 +172,157 @@ async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_mod
                         merged.update(item)
                 input_schema_fields = merged
 
-            # Log tool call
-            if session_context:
-                await session_context.send_nano("tool_call", f"Calling tool: {tool_name}")
-                await session_context.append_and_persist_memory(
-                    "asset_agent",
-                    f"Tool call decision: {tool_name} with parameters: {input_schema_fields}",
-                    {"phase": "tool_call", "tool_name": tool_name, "parameters": input_schema_fields}
-                )
 
             # ALWAYS override user_id with actual value from session context
             if user_id and isinstance(input_schema_fields, dict):
                 input_schema_fields["user_id"] = user_id
                 print(f"🔧 ASSET_AGENT: Overriding user_id with actual value: {user_id}")
+            
+            # Special handling for CRUD tools - transform parameters to match function signatures
+            if isinstance(input_schema_fields, dict):
+                transformed_params = {}
+                
+                # Handle CREATE operations (need to bundle data into *_data parameter)
+                if tool_name in ["create_brand", "create_competitor", "create_template"]:
+                    data_type = tool_name.replace("create_", "")
+                    data_dict = {}
+                    
+                    # Extract relevant fields for each data type
+                    if data_type == "brand":
+                        for key in ["name", "slug", "description", "website", "industry", "target_audience"]:
+                            if key in input_schema_fields:
+                                data_dict[key] = input_schema_fields.pop(key)
+                        
+                        # Add required fields with defaults if not provided
+                        if "theme" not in data_dict:
+                            data_dict["theme"] = {
+                                "primary_color": "#3B82F6",
+                                "secondary_color": "#1E40AF", 
+                                "font": "Inter",
+                                "logo_url": None
+                            }
+                        
+                        if "details" not in data_dict:
+                            data_dict["details"] = {
+                                "website": data_dict.get("website"),
+                                "industry": data_dict.get("industry"),
+                                "audience": data_dict.get("target_audience", [])
+                            }
+                        
+                        # Clean up individual fields that are now in details
+                        for field in ["website", "industry", "target_audience"]:
+                            if field in data_dict:
+                                del data_dict[field]
+                        
+                        # Add default posting settings
+                        if "default_posting_settings" not in data_dict:
+                            data_dict["default_posting_settings"] = {
+                                "timezone": "UTC",
+                                "default_platforms": ["instagram", "linkedin"],
+                                "post_approval_required": False
+                            }
+                    
+                    elif data_type == "competitor":
+                        for key in ["name", "platform", "handle", "description", "website", "industry"]:
+                            if key in input_schema_fields:
+                                data_dict[key] = input_schema_fields.pop(key)
+                        
+                        # Add required fields with defaults if not provided
+                        if "platform" not in data_dict:
+                            data_dict["platform"] = "instagram"
+                        
+                        if "handle" not in data_dict:
+                            data_dict["handle"] = data_dict.get("name", "").lower().replace(" ", "_")
+                        
+                        if "profile_url" not in data_dict:
+                            platform = data_dict.get("platform", "instagram")
+                            handle = data_dict.get("handle", "")
+                            if platform == "instagram":
+                                data_dict["profile_url"] = f"https://instagram.com/{handle}"
+                            elif platform == "linkedin":
+                                data_dict["profile_url"] = f"https://linkedin.com/in/{handle}"
+                            elif platform == "youtube":
+                                data_dict["profile_url"] = f"https://youtube.com/@{handle}"
+                            else:
+                                data_dict["profile_url"] = f"https://{platform}.com/{handle}"
+                    
+                    elif data_type == "template":
+                        for key in ["name", "content", "category", "description", "brand_id"]:
+                            if key in input_schema_fields:
+                                data_dict[key] = input_schema_fields.pop(key)
+                        
+                        # Add required fields with defaults if not provided
+                        if "type" not in data_dict:
+                            data_dict["type"] = "instagram_post"
+                        
+                        if "structure" not in data_dict:
+                            data_dict["structure"] = {
+                                "content": data_dict.get("content", ""),
+                                "media_placeholders": [],
+                                "hashtags": [],
+                                "call_to_action": ""
+                            }
+                    
+                    transformed_params = {
+                        "user_id": input_schema_fields.get("user_id", user_id),
+                        f"{data_type}_data": data_dict
+                    }
+                
+                # Handle UPDATE operations (need brand_id/competitor_id/template_id and update_data)
+                elif tool_name in ["update_brand", "update_competitor", "update_template"]:
+                    data_type = tool_name.replace("update_", "")
+                    update_data = {}
+                    
+                    # Extract ID field
+                    id_field = f"{data_type}_id"
+                    entity_id = input_schema_fields.pop(id_field, None)
+                    
+                    # Extract update fields (exclude user_id and id fields)
+                    for key, value in input_schema_fields.items():
+                        if key not in ["user_id", id_field]:
+                            update_data[key] = value
+                    
+                    transformed_params = {
+                        "user_id": input_schema_fields.get("user_id", user_id),
+                        f"{data_type}_id": entity_id,
+                        "update_data": update_data
+                    }
+                
+                # Handle DELETE operations (need user_id and entity_id)
+                elif tool_name in ["delete_brand", "delete_competitor", "delete_template"]:
+                    data_type = tool_name.replace("delete_", "")
+                    id_field = f"{data_type}_id"
+                    entity_id = input_schema_fields.pop(id_field, None)
+                    
+                    transformed_params = {
+                        "user_id": input_schema_fields.get("user_id", user_id),
+                        f"{data_type}_id": entity_id
+                    }
+                
+                # Handle scrape_competitor_data (user_id, competitor_id, limit)
+                elif tool_name == "scrape_competitor_data":
+                    competitor_id = input_schema_fields.pop("competitor_id", None)
+                    limit = input_schema_fields.pop("limit", 10)
+                    
+                    transformed_params = {
+                        "user_id": input_schema_fields.get("user_id", user_id),
+                        "competitor_id": competitor_id,
+                        "limit": limit
+                    }
+                
+                # Handle perform_bulk_scraping (user_id, scraping_requests)
+                elif tool_name == "perform_bulk_scraping":
+                    scraping_requests = input_schema_fields.pop("scraping_requests", [])
+                    
+                    transformed_params = {
+                        "user_id": input_schema_fields.get("user_id", user_id),
+                        "scraping_requests": scraping_requests
+                    }
+                
+                # If we transformed parameters, use them
+                if transformed_params:
+                    input_schema_fields = transformed_params
+                    print(f"🔧 ASSET_AGENT: Transformed {tool_name} params: {input_schema_fields}")
             
             # Call the tool using tool_router
             try:
@@ -238,8 +338,6 @@ async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_mod
                     "tool_required": False,
                     "error": True
                 }
-                if session_context:
-                    await session_context.send_nano("tool_error", f"Tool {tool_name} failed: {str(tool_error)}")
                 return error_response
 
             # Check if tool returned an error
@@ -250,44 +348,19 @@ async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_mod
                     "tool_required": False,
                     "error": True
                 }
-                if session_context:
-                    await session_context.send_nano("tool_error", f"Tool {tool_name} returned error: {tool_result.get('error')}")
                 print(f"=== ASSET_AGENT: RETURNING ERROR RESPONSE: {error_response} ===")
                 return error_response
 
-            if session_context:
-                await session_context.send_nano("tool_result", f"Tool {tool_name} completed successfully")
-                
-                # Create JSON serializable version of tool_result
-                def json_serializable(obj):
-                    if hasattr(obj, 'isoformat'):  # datetime objects
-                        return obj.isoformat()
-                    elif hasattr(obj, '__dict__'):
-                        return str(obj)
-                    else:
-                        return str(obj)
-                
-                try:
-                    tool_result_json = __import__('json').dumps(tool_result, indent=2, default=json_serializable)
-                except Exception as json_error:
-                    print(f"=== ASSET_AGENT: JSON serialization error: {json_error}, using string representation ===")
-                    tool_result_json = str(tool_result)
-                
-                await session_context.append_and_persist_memory(
-                    "asset_agent",
-                    f"Tool {tool_name} result: {tool_result_json[:300]}...",
-                    {"phase": "tool_result", "tool_name": tool_name, "success": True, "result_type": "tool_output"}
-                )
-                if session_context.chat_id:
-                    await save_chat_message(
-                        chat_id=session_context.chat_id,
-                        role="tool",
-                        content=tool_result_json,
-                        agent="asset_agent"
-                    )
-
             # Ask model for the next step
             # Create JSON serializable version for the follow-up query
+            def json_serializable(obj):
+                if hasattr(obj, 'isoformat'):  # datetime objects
+                    return obj.isoformat()
+                elif hasattr(obj, '__dict__'):
+                    return str(obj)
+                else:
+                    return str(obj)
+            
             try:
                 tool_result_for_query = __import__('json').dumps(tool_result, indent=2, default=json_serializable)
             except Exception:
@@ -308,14 +381,6 @@ async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_mod
 
             print(f"=== ASSET_AGENT: Follow-up query: {follow_up_query} ===")
 
-            if session_context:
-                await session_context.send_nano("model_call", "Asset agent processing tool result")
-                await session_context.append_and_persist_memory(
-                    "asset_agent",
-                    f"Follow-up model call: Processing tool results for next step",
-                    {"phase": "follow_up", "tool_name": tool_name, "query": query[:100]}
-                )
-
             print(f"=== ASSET_AGENT: Calling follow-up model with query: {follow_up_query[:200]}... ===")
             try:
                 next_raw = await chat_model_router(system_prompt, follow_up_query, final_chat_llm_model, final_model_name)
@@ -332,14 +397,6 @@ async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_mod
                 raise normalize_error
                 
             last_normalized = next_normalized
-
-            if session_context:
-                await session_context.append_and_persist_memory(
-                    "asset_agent",
-                    f"Follow-up model response: {str(next_normalized)[:200]}...",
-                    {"phase": "follow_up", "response_type": "model_iteration", "tool_name": tool_name}
-                )
-
 
             if isinstance(next_normalized, str):
                 try:
@@ -361,7 +418,9 @@ async def asset_agent(query: str, model_name: Optional[str] = None, chat_llm_mod
         traceback.print_exc()
         print(f"=== ASSET_AGENT: END TRACEBACK ===")
         
-        if session_context:
-            await session_context.send_nano("error", f"Asset agent loop error: {e}")
+        # Add assistant response to conversation history even in error case
+        if session_id:
+            _add_to_conversation(session_id, "assistant", str(normalized))
+        
         print(f"=== ASSET_AGENT: EXCEPTION FALLBACK RETURN: {normalized} ===")
         return normalized

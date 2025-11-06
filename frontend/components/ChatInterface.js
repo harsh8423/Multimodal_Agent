@@ -16,7 +16,19 @@ import {
   ChevronDown,
   Settings,
   BarChart3,
-  ListTodo
+  ListTodo,
+  Mic,
+  StopCircle,
+  Zap,
+  Play,
+  Circle,
+  XCircle,
+  Image,
+  FileText,
+  Video,
+  Paperclip,
+  Building2,
+  Users
 } from 'lucide-react';
 import Message from '@/components/Message';
 import ChatInput from '@/components/ChatInput';
@@ -57,12 +69,16 @@ const ChatInterface = ({ user: userProp }) => {
   const [showTodos, setShowTodos] = useState(false);
   const [todos, setTodos] = useState([]);
   const [todosLoading, setTodosLoading] = useState(false);
+  const [activeTodo, setActiveTodo] = useState(null);
+  const [todoExpanded, setTodoExpanded] = useState(false);
+  const [showAttachments, setShowAttachments] = useState(false);
   const router = useRouter();
 
   const clientRef = useRef(null);
   const API_BASE_URL = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000') : '';
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const textareaRef = useRef(null);
   const imageInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const sidebarRef = useRef(null);
@@ -71,6 +87,34 @@ const ChatInterface = ({ user: userProp }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Auto-resize textarea functionality
+  const autoResizeTextarea = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const scrollHeight = textareaRef.current.scrollHeight;
+      const maxHeight = 150; // 100px max height
+      textareaRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+    }
+  };
+
+  // Handle textarea input changes
+  const handleTextareaChange = (e) => {
+    autoResizeTextarea();
+  };
+
+  // Handle keydown events for Enter/Shift+Enter
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const message = e.target.value?.trim();
+      if (message && isConnected && !isSending && handleSendMessage) {
+        handleSendMessage(message);
+        e.target.value = '';
+        autoResizeTextarea(); // Reset height after sending
+      }
+    }
+  };
+
   // Load todos when chat changes
   useEffect(() => {
     if (chatId && authService.token) {
@@ -78,16 +122,47 @@ const ChatInterface = ({ user: userProp }) => {
     }
   }, [chatId]);
 
+  // Set up periodic refresh for todos to keep them updated
+  useEffect(() => {
+    if (!chatId || !authService.token) return;
+
+    const interval = setInterval(() => {
+      loadTodos();
+    }, 3000); // Refresh every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [chatId, authService.token]);
+
   const loadTodos = async () => {
     if (!chatId || !authService.token) return;
+    
+    // Prevent concurrent calls
+    if (todosLoading) return;
     
     setTodosLoading(true);
     try {
       const todosData = await todoAPI.getChatTodos(chatId, authService.token);
       setTodos(todosData);
+      
+      // Find the most recent active todo
+      const activeTodos = todosData.filter(todo => 
+        todo.status === 'active' && 
+        todo.tasks.some(task => task.status !== 'done' && task.status !== 'completed')
+      );
+      
+      if (activeTodos.length > 0) {
+        // Sort by updated_at to get the most recent
+        const mostRecentTodo = activeTodos.sort((a, b) => 
+          new Date(b.updated_at) - new Date(a.updated_at)
+        )[0];
+        setActiveTodo(mostRecentTodo);
+      } else {
+        setActiveTodo(null);
+      }
     } catch (error) {
       console.error('Failed to load todos:', error);
       setTodos([]);
+      setActiveTodo(null);
     } finally {
       setTodosLoading(false);
     }
@@ -96,6 +171,31 @@ const ChatInterface = ({ user: userProp }) => {
   const refreshTodos = () => {
     loadTodos();
   };
+
+  const attachmentOptions = [
+    { icon: Image, label: 'Image', action: () => {
+      if (imageInputRef.current) {
+        imageInputRef.current.click();
+      }
+      setShowAttachments(false);
+    }},
+    { icon: Video, label: 'Video', action: () => {
+      if (videoInputRef.current) {
+        videoInputRef.current.click();
+      }
+      setShowAttachments(false);
+    }},
+    { icon: FileText, label: 'Document', action: () => {
+      // TODO: Implement document upload
+      console.log('Document upload not implemented yet');
+      setShowAttachments(false);
+    }},
+    { icon: Paperclip, label: 'File', action: () => {
+      // TODO: Implement file upload
+      console.log('File upload not implemented yet');
+      setShowAttachments(false);
+    }},
+  ];
 
   useEffect(() => {
     // Prevent multiple WebSocket connections
@@ -196,6 +296,16 @@ const ChatInterface = ({ user: userProp }) => {
         setMessages(prev => [...prev, msg]);
         setIsTyping(false);
         setIsSending(false);
+        
+        // Handle todo creation
+        if (data.metadata && data.metadata.message_type === 'todo_created') {
+          const todoData = data.metadata.todo_data;
+          if (todoData) {
+            setActiveTodo(todoData);
+            // Refresh todos to get updated list
+            refreshTodos();
+          }
+        }
       });
 
 
@@ -224,7 +334,10 @@ const ChatInterface = ({ user: userProp }) => {
         setChats(prev => [{ chat_id: data.chat_id, title: 'New Chat', last_active: new Date().toISOString(), message_count: 0 }, ...prev.filter(c => c.chat_id !== data.chat_id)]);
         setNanoStream([]);
         setNanoExpanded(false);
+        setActiveTodo(null); // Clear active todo for new chat
+        setTodoExpanded(false);
         await loadChatMessages(data.chat_id);
+        // Note: loadTodos() will be called automatically by useEffect when chatId changes
       });
 
       wsClient.on('chat_switched', async (data) => {
@@ -253,7 +366,9 @@ const ChatInterface = ({ user: userProp }) => {
         
         setNanoStream([]);
         setNanoExpanded(false);
+        setTodoExpanded(false);
         await loadChatMessages(data.chat_id);
+        // Note: loadTodos() will be called automatically by useEffect when chatId changes
       });
 
       wsClient.on('title_updated', (data) => {
@@ -305,6 +420,13 @@ const ChatInterface = ({ user: userProp }) => {
     const message = (typeof text === 'string' ? text : inputMessage).trim();
     if (!message || message.length === 0 || !isConnected || isSending) {
       return;
+    }
+
+    // Create chat if none exists
+    if (!chatId) {
+      await handleCreateChat();
+      // Wait a bit for chat creation to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     setIsSending(true);
@@ -494,6 +616,7 @@ const ChatInterface = ({ user: userProp }) => {
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
   };
+
 
   // Cleanup resize listeners on unmount
   useEffect(() => {
@@ -744,20 +867,36 @@ const ChatInterface = ({ user: userProp }) => {
             </div>
           )}
 
-          <div className="pb-24">
-            {messages.map((message) => (
+          <div className="pb-24 mb-16">
+            {messages.map((message, index) => (
               <Message
                 key={message.id}
                 message={message.content}
                 isUser={message.role === 'user'}
                 agent={message.agent}
                 timestamp={null}
-                isStreaming={false}
                 mediaUrl={message.mediaUrl}
                 mediaType={message.mediaType}
                 isNotification={message.isNotification}
                 notificationType={message.notificationType}
                 metadata={message.metadata}
+                // Show overlay only on the last message
+                showChatInputOverlay={index === messages.length - 1}
+                activeTodo={activeTodo}
+                todoExpanded={todoExpanded}
+                onTodoToggle={() => setTodoExpanded(v => !v)}
+                nanoStream={nanoStream}
+                nanoExpanded={nanoExpanded}
+                onNanoToggle={() => setNanoExpanded(v => !v)}
+                // Input box props
+                onSendMessage={handleSendMessage}
+                placeholder="Message the agent..."
+                disabled={!isConnected || isSending}
+                // isStreaming={message.role !== 'user' && (isTyping || isSending)}
+                onStopStreaming={() => {
+                  setIsTyping(false);
+                  setIsSending(false);
+                }}
               />
             ))}
 
@@ -815,53 +954,337 @@ const ChatInterface = ({ user: userProp }) => {
           </div>
         )}
 
-        {/* Revamped Input Area - centered within chat area only */}
-        <div className="bg-transparent px-6 py-0">
-          <div className="max-w-4xl mx-auto">
-            <ChatInput
-              onSendMessage={handleSendMessage}
-              onFileAttach={(type) => {
-                if (type === 'image') {
-                  imageInputRef.current?.click();
-                } else if (type === 'video') {
-                  videoInputRef.current?.click();
-                }
-              }}
-              onVoiceRecord={(active) => {
-                // placeholder for voice recording integration
-                console.log('Voice recording', active ? 'started' : 'stopped');
-              }}
-              onImagePaste={(file) => {
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                  setSelectedMedia({
-                    type: 'image',
-                    file,
-                    preview: event.target.result,
-                    name: file.name,
-                    size: file.size
-                  });
-                };
-                reader.readAsDataURL(file);
-              }}
-              onAssetDrop={handleAssetDrop}
-              attachedAssets={attachedAssets}
-              onRemoveAsset={handleRemoveAsset}
-              placeholder="Message the agent..."
-              disabled={!isConnected || isSending}
-              isStreaming={isTyping || isSending}
-              onStopStreaming={() => {
+        {/* ChatInput Overlay - Fixed at bottom, centered within chat area */}
+        {authService.isAuthenticated() && (
+          <div className="fixed bottom-0 z-50 bg-transparent" style={{
+            left: sidebarCollapsed ? '64px' : `${sidebarWidth}px`,
+            right: '0',
+            width: `calc(100vw - ${sidebarCollapsed ? '64px' : `${sidebarWidth}px`})`
+          }}>
+          <div className="max-w-4xl mx-auto px-6 pb-4">
+            {/* Attachment Options */}
+            {showAttachments && (
+              <div className="mb-3 flex justify-center">
+                <div className="bg-white/90 backdrop-blur-md border border-gray-200/80 rounded-2xl shadow-xl p-3">
+                  <div className="flex items-center gap-2">
+                    {attachmentOptions.map((option, index) => (
+                      <button
+                        key={index}
+                        onClick={option.action}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100/80 rounded-xl transition-all duration-200"
+                      >
+                        <option.icon className="w-4 h-4" />
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Todo Display - integrated with input */}
+            {activeTodo && (
+                <div className="relative flex justify-center">
+                  {/* Todo Header Bar */}
+                  <div className={cn(
+                    "flex items-center px-3 py-2 text-[11px] font-mono text-gray-600 bg-white/90 backdrop-blur-md border border-gray-200/60 border-b-0 w-[80%]",
+                    nanoStream.length > 0 ? "rounded-t-3xl" : "rounded-t-3xl"
+                  )}>
+                    <button
+                      type="button"
+                      className="mr-2 p-0.5 text-gray-500 hover:text-gray-700"
+                      onClick={() => setTodoExpanded(v => !v)}
+                      title={todoExpanded ? 'Hide details' : 'Show details'}
+                    >
+                      {todoExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+                    </button>
+                    
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-gray-800 font-semibold">
+                        {activeTodo.tasks.filter(task => task.status === 'done' || task.status === 'completed').length} of {activeTodo.tasks.length} To-dos
+                      </span>
+                      {activeTodo.tasks.find(task => task.status === 'in-progress') && (
+                        <span className="truncate text-gray-500">
+                          {activeTodo.tasks.find(task => task.status === 'in-progress').title}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Progress indicator */}
+                    <div className="flex items-center gap-1 ml-2">
+                      <div className="w-8 h-1 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300"
+                          style={{ 
+                            width: `${activeTodo.tasks.length > 0 ? (activeTodo.tasks.filter(task => task.status === 'done' || task.status === 'completed').length / activeTodo.tasks.length) * 100 : 0}%` 
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded Todo List */}
+                  {todoExpanded && (
+                    <div className="absolute bottom-full mb-1 left-1/2 transform -translate-x-1/2 w-[80%] rounded-t-md border border-gray-200 bg-white shadow-lg overflow-hidden">
+                      <div className="max-h-60 overflow-y-auto py-1">
+                        {/* Todo Title */}
+                        <div className="px-3 py-2 border-b border-gray-100">
+                          <h3 className="text-sm font-semibold text-gray-900">{activeTodo.title}</h3>
+                        </div>
+                        
+                        {/* Tasks List */}
+                        {activeTodo.tasks.map((task) => {
+                          const isActive = task.status === 'in-progress';
+                          
+                          const getStatusIcon = (status, isActive = false) => {
+                            if (isActive) {
+                              return <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center">
+                                <Play className="w-2 h-2 text-white" />
+                              </div>;
+                            }
+                            
+                            switch (status) {
+                              case 'done':
+                              case 'completed':
+                                return <div className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center">
+                                  <CheckCircle className="w-2 h-2 text-white" />
+                                </div>;
+                              case 'in-progress':
+                                return <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center">
+                                  <Play className="w-2 h-2 text-white" />
+                                </div>;
+                              case 'pending':
+                                return <Circle className="w-3 h-3 text-gray-400" />;
+                              default:
+                                return <XCircle className="w-3 h-3 text-red-500" />;
+                            }
+                          };
+
+                          const getStatusColor = (status) => {
+                            switch (status) {
+                              case 'done':
+                              case 'completed':
+                                return 'text-gray-500 line-through';
+                              case 'in-progress':
+                                return 'text-blue-600';
+                              case 'pending':
+                                return 'text-gray-500';
+                              default:
+                                return 'text-red-600';
+                            }
+                          };
+                          
+                          return (
+                            <div key={task.step_num} className="px-3 py-1.5 text-[11px] font-mono">
+                              <div className="flex items-center gap-2">
+                                {/* Status Icon */}
+                                <div className="flex-shrink-0">
+                                  {getStatusIcon(task.status, isActive)}
+                                </div>
+                                
+                                {/* Task Content */}
+                                <div className="min-w-0 flex-1">
+                                  <div className={cn(
+                                    "truncate",
+                                    getStatusColor(task.status),
+                                    isActive && "font-semibold"
+                                  )}>
+                                    {task.title}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Nano message bar - integrated with input */}
+              {nanoStream.length > 0 && (
+                <div className="relative">
+                  {/* Nano message bar */}
+                  <div className="flex items-center px-3 py-2 text-[11px] font-mono text-gray-600 bg-white/90 backdrop-blur-md border border-gray-200/80 rounded-t-3xl border-b-0">
+                    <button
+                      type="button"
+                      className="mr-2 p-0.5 text-gray-500 hover:text-gray-700"
+                      onClick={() => setNanoExpanded(v => !v)}
+                      title={nanoExpanded ? 'Hide details' : 'Show details'}
+                    >
+                      {nanoExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+                    </button>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-gray-800">{nanoStream[nanoStream.length - 1].agent}</span>
+                      <span className="truncate text-gray-500">{nanoStream[nanoStream.length - 1].text}</span>
+                    </div>
+                  </div>
+
+                  {/* Dropdown list: opens upward */}
+                  {nanoExpanded && (
+                    <div className="absolute bottom-full mb-1 left-0 right-0 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
+                      <div className="max-h-40 overflow-y-auto py-1">
+                        {[...nanoStream].reverse().map(n => (
+                          <div key={n.id} className="px-3 py-1.5 text-[11px] font-mono text-gray-700 flex items-center gap-2">
+                            <span className="text-gray-800">{n.agent}</span>
+                            <span className="truncate text-gray-500">{n.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Attached Assets */}
+              {attachedAssets.length > 0 && (
+                <div className="px-4 pt-3 pb-2">
+                  <div className="flex flex-wrap gap-2">
+                    {attachedAssets.map((assetData, index) => {
+                      const getAssetIcon = (type) => {
+                        switch (type) {
+                          case 'brands': return Building2;
+                          case 'competitors': return Users;
+                          case 'templates': return FileText;
+                          default: return FileText;
+                        }
+                      };
+                      
+                      const getAssetDisplayName = (asset, type) => {
+                        switch (type) {
+                          case 'brands':
+                            return asset.name || 'Unnamed Brand';
+                          case 'competitors':
+                            const username = asset.username || asset.name || 'Unknown';
+                            const platform = asset.platform || 'Unknown Platform';
+                            return `${username} - ${platform}`;
+                          case 'templates':
+                            return asset.title || asset.name || 'Unnamed Template';
+                          default:
+                            return asset.name || asset.title || 'Unnamed Asset';
+                        }
+                      };
+                      
+                      const IconComponent = getAssetIcon(assetData.type);
+                      return (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-sm"
+                        >
+                          <IconComponent className="w-4 h-4 text-blue-600" />
+                          <span className="text-blue-800 font-medium">
+                            {getAssetDisplayName(assetData.asset, assetData.type)}
+                          </span>
+                          <button
+                            onClick={() => handleRemoveAsset(index)}
+                            className="p-0.5 hover:bg-blue-100 rounded transition-colors"
+                          >
+                            <X className="w-3 h-3 text-blue-600" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Input Box */}
+              <div 
+                className={cn(
+                  "bg-white/90 backdrop-blur-md border border-gray-200/80 shadow-2xl overflow-hidden transition-all duration-300 hover:shadow-3xl hover:border-gray-300/80",
+                  nanoStream.length > 0 ? "rounded-b-3xl" : "rounded-3xl"
+                )}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'copy';
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  try {
+                    const assetData = JSON.parse(e.dataTransfer.getData('application/json'));
+                    if (assetData && assetData.type && assetData.asset) {
+                      handleAssetDrop(assetData);
+                    }
+                  } catch (error) {
+                    console.error('Failed to parse dropped asset data:', error);
+                  }
+                }}
+              >
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const message = e.target.message?.value?.trim();
+                  if (message && isConnected && !isSending && handleSendMessage) {
+                    handleSendMessage(message);
+                    e.target.message.value = '';
+                    autoResizeTextarea(); // Reset height after sending
+                  }
+                }} className="flex items-center gap-3 p-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAttachments(!showAttachments)}
+                    className={cn(
+                      "flex-shrink-0 p-3 rounded-2xl transition-all duration-200 hover:scale-105",
+                      showAttachments 
+                        ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/25" 
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800"
+                    )}
+                    title="Attach files"
+                  >
+                    <Plus className={cn("w-5 h-5 transition-transform duration-200", showAttachments && "rotate-45")} />
+                  </button>
+
+                  <div className="flex-1 relative">
+                    <textarea
+                      ref={textareaRef}
+                      name="message"
+                      placeholder="Message the agent..."
+                      disabled={!isConnected || isSending}
+                      rows={1}
+                      onChange={handleTextareaChange}
+                      onKeyDown={handleKeyDown}
+                      className="w-full resize-none bg-transparent text-gray-900 placeholder-gray-500 border-none outline-none focus:outline-none focus:ring-0 focus:border-none text-base leading-6 py-3 px-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"
+                      style={{ minHeight: '24px', maxHeight: '100px' }}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="flex-shrink-0 p-3 rounded-2xl transition-all duration-200 hover:scale-105 bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800"
+                      title="Start voice recording"
+                    >
+                      <Mic className="w-5 h-5" />
+                    </button>
+
+                    {isTyping || isSending ? (
+                      <button
+                        type="button"
+                        onClick={() => {
                 setIsTyping(false);
                 setIsSending(false);
               }}
-              maxRows={4}
-              nanoStream={nanoStream}
-              nanoExpanded={nanoExpanded}
-              onNanoToggle={() => setNanoExpanded(v => !v)}
-            />
+                        className="flex-shrink-0 p-3 bg-red-500 text-white rounded-2xl shadow-lg shadow-red-500/25 hover:bg-red-600 transition-all duration-200 hover:scale-105"
+                        title="Stop generation"
+                      >
+                        <StopCircle className="w-5 h-5" />
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={!isConnected || isSending}
+                        className="flex-shrink-0 p-3 rounded-2xl transition-all duration-200 hover:scale-105 bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30"
+                        title="Send message"
+                      >
+                        <Send className="w-5 h-5" />
+                      </button>
+                    )}
           </div>
-        </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
         <input
           ref={imageInputRef}
           type="file"

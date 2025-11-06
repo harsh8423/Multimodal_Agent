@@ -2,15 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { brandsAPI } from '@/lib/api/socialMedia';
-import BrandForm from './BrandForm';
 import BrandCard from './BrandCard';
 
-export default function BrandsTab({ onUpdate }) {
+export default function BrandsTab({ onUpdate, onFormOpen }) {
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editingBrand, setEditingBrand] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -45,28 +42,12 @@ export default function BrandsTab({ onUpdate }) {
     }
   };
 
-  const handleCreate = async (brandData) => {
-    try {
-      await brandsAPI.create(brandData);
-      setShowForm(false);
-      loadBrands();
-      onUpdate?.();
-    } catch (err) {
-      console.error('Failed to create brand:', err);
-      throw err;
-    }
+  const handleCreate = () => {
+    onFormOpen?.('brand');
   };
 
-  const handleUpdate = async (brandId, updateData) => {
-    try {
-      await brandsAPI.update(brandId, updateData);
-      setEditingBrand(null);
-      loadBrands();
-      onUpdate?.();
-    } catch (err) {
-      console.error('Failed to update brand:', err);
-      throw err;
-    }
+  const handleEdit = (brand) => {
+    onFormOpen?.('brand', brand);
   };
 
   const handleDelete = async (brandId) => {
@@ -112,7 +93,7 @@ export default function BrandsTab({ onUpdate }) {
           </p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={handleCreate}
           className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -181,7 +162,7 @@ export default function BrandsTab({ onUpdate }) {
               </p>
               <div className="mt-6">
                 <button
-                  onClick={() => setShowForm(true)}
+                  onClick={handleCreate}
                   className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -198,7 +179,7 @@ export default function BrandsTab({ onUpdate }) {
                   <BrandCard
                     key={brand.id}
                     brand={brand}
-                    onEdit={setEditingBrand}
+                    onEdit={handleEdit}
                     onDelete={handleDelete}
                     onDuplicate={handleDuplicate}
                   />
@@ -279,17 +260,6 @@ export default function BrandsTab({ onUpdate }) {
         </>
       )}
 
-      {/* Brand Form Modal */}
-      {(showForm || editingBrand) && (
-        <BrandForm
-          brand={editingBrand}
-          onSubmit={editingBrand ? handleUpdate : handleCreate}
-          onClose={() => {
-            setShowForm(false);
-            setEditingBrand(null);
-          }}
-        />
-      )}
     </div>
   );
 }

@@ -144,7 +144,7 @@ const AssetManagerChatbot = ({ selectedBrand, onDataUpdate }) => {
       isMinimized 
         ? 'w-80 h-16' 
         : isMaximized 
-          ? 'w-96 h-[calc(100vh-2rem)]' 
+          ? 'w-[600px] h-[calc(100vh-2rem)]' 
           : 'w-80 h-[500px]'
     }`}>
       <div className="bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col h-full overflow-hidden">

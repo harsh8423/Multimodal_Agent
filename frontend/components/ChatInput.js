@@ -12,9 +12,10 @@ import {
   Zap,
   ChevronUp,
   ChevronDown,
+  CheckCircle,
   X,
   Building2,
-  Users
+  Users, XCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -33,7 +34,10 @@ const ChatInput = ({
   maxRows = 4,
   nanoStream = [],
   nanoExpanded = false,
-  onNanoToggle = () => {}
+  onNanoToggle = () => {},
+  activeTodo = null,
+  todoExpanded = false,
+  onTodoToggle = () => {}
 }) => {
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -165,6 +169,126 @@ const ChatInput = ({
           )}
 
           <div className="relative">
+            {/* Todo Display - integrated with input */}
+            {activeTodo && (
+              <div className="relative flex justify-center">
+                {/* Todo Header Bar */}
+                <div className={cn(
+                  "flex items-center px-3 py-2 text-[11px] font-mono text-gray-600 bg-white/90 backdrop-blur-md border border-gray-200/60 border-b-0 w-[80%]",
+                  nanoStream.length > 0 ? "rounded-t-3xl" : "rounded-t-3xl"
+                )}>
+                  <button
+                    type="button"
+                    className="mr-2 p-0.5 text-gray-500 hover:text-gray-700"
+                    onClick={onTodoToggle}
+                    title={todoExpanded ? 'Hide details' : 'Show details'}
+                  >
+                    {todoExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+                  </button>
+                  
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-gray-800 font-semibold">
+                      {activeTodo.tasks.filter(task => task.status === 'done' || task.status === 'completed').length} of {activeTodo.tasks.length} To-dos
+                    </span>
+                    {activeTodo.tasks.find(task => task.status === 'in-progress') && (
+                      <span className="truncate text-gray-500">
+                        {activeTodo.tasks.find(task => task.status === 'in-progress').title}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Progress indicator */}
+                  <div className="flex items-center gap-1 ml-2">
+                    <div className="w-8 h-1 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300"
+                        style={{ 
+                          width: `${activeTodo.tasks.length > 0 ? (activeTodo.tasks.filter(task => task.status === 'done' || task.status === 'completed').length / activeTodo.tasks.length) * 100 : 0}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded Todo List */}
+                {todoExpanded && (
+                  <div className="absolute bottom-full mb-1 left-1/2 transform -translate-x-1/2 w-[80%] rounded-t-md border border-gray-200 bg-white shadow-lg overflow-hidden">
+                    <div className="max-h-60 overflow-y-auto py-1">
+                      {/* Todo Title */}
+                      <div className="px-3 py-2 border-b border-gray-100">
+                        <h3 className="text-sm font-semibold text-gray-900">{activeTodo.title}</h3>
+                      </div>
+                      
+                      {/* Tasks List */}
+                      {activeTodo.tasks.map((task) => {
+                        const isActive = task.status === 'in-progress';
+                        
+                        const getStatusIcon = (status, isActive = false) => {
+                          if (isActive) {
+                            return <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center">
+                              <Play className="w-2 h-2 text-white" />
+                            </div>;
+                          }
+                          
+                          switch (status) {
+                            case 'done':
+                            case 'completed':
+                              return <div className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center">
+                                <CheckCircle className="w-2 h-2 text-white" />
+                              </div>;
+                            case 'in-progress':
+                              return <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center">
+                                <Play className="w-2 h-2 text-white" />
+                              </div>;
+                            case 'pending':
+                              return <Circle className="w-3 h-3 text-gray-400" />;
+                            default:
+                              return <XCircle className="w-3 h-3 text-red-500" />;
+                          }
+                        };
+
+                        const getStatusColor = (status) => {
+                          switch (status) {
+                            case 'done':
+                            case 'completed':
+                              return 'text-gray-500 line-through';
+                            case 'in-progress':
+                              return 'text-blue-600';
+                            case 'pending':
+                              return 'text-gray-500';
+                            default:
+                              return 'text-red-600';
+                          }
+                        };
+                        
+                        return (
+                          <div key={task.step_num} className="px-3 py-1.5 text-[11px] font-mono">
+                            <div className="flex items-center gap-2">
+                              {/* Status Icon */}
+                              <div className="flex-shrink-0">
+                                {getStatusIcon(task.status, isActive)}
+                              </div>
+                              
+                              {/* Task Content */}
+                              <div className="min-w-0 flex-1">
+                                <div className={cn(
+                                  "truncate",
+                                  getStatusColor(task.status),
+                                  isActive && "font-semibold"
+                                )}>
+                                  {task.title}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Nano message bar - integrated with input */}
             {nanoStream.length > 0 && (
               <div className="relative">

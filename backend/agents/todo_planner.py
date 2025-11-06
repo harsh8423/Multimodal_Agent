@@ -17,22 +17,24 @@ DEFAULT_REGISTRY_FILENAME = "system_prompts.json"
 async def todo_planner(query: str, model_name: Optional[str] = None, chat_llm_model: Optional[str] = None,
                       registry_path: Optional[str] = None, session_context: Optional[SessionContext] = None,
                       max_iterations: int = 5, user_metadata: Optional[Dict] = None, 
-                      user_image_path: Optional[str] = None) -> Any:
+                      user_image_path: Optional[str] = None, analysis_context: Optional[Dict] = None) -> Any:
     """
-    To-do Planner Agent - Specialized agent for creating and managing todo lists and content plans.
+    Enhanced To-do Planner Agent - Creates intelligent, context-aware content creation workflows.
     
     Capabilities:
-    - Create structured todo lists for complex multi-step tasks
-    - Generate content plans for social media platforms
-    - Break down complex workflows into manageable steps
-    - Track progress and update task statuses
+    - Create structured todo lists based on content analysis
+    - Generate intelligent workflows that adapt to user needs
+    - Break down complex content creation into logical phases
+    - Include context gathering, research, and planning phases
+    - Track progress and update task statuses intelligently
     - Provide efficient task prioritization and organization
     
     The agent focuses on:
-    - Todo list creation and management
-    - Content planning and structuring
-    - Task breakdown and organization
-    - Progress tracking and updates
+    - Intelligent workflow creation based on analysis
+    - Context-aware task breakdown and organization
+    - Research and planning phases before execution
+    - Progress tracking and adaptive updates
+    - Smart agent coordination and task dependencies
     """
     # Get chat model configuration from central config
     config = get_final_config(agent_name="todo_planner")
@@ -122,6 +124,32 @@ async def todo_planner(query: str, model_name: Optional[str] = None, chat_llm_mo
     # Build system prompt for this agent (may raise if registry missing)
     system_prompt = build_system_prompt("todo_planner", str(registry_path),
                                         extra_instructions=f"Memory context: {todo_planner_memory_context}\n\nChat history: {chat_history_context}")
+    
+    # Add analysis context if provided (from content_analyzer)
+    if analysis_context:
+        analysis_text = f"""
+CONTENT ANALYSIS CONTEXT:
+- Content Type: {analysis_context.get('analysis', {}).get('content_type', 'unknown')}
+- Platform: {analysis_context.get('analysis', {}).get('platform', 'unknown')}
+- Intent: {analysis_context.get('analysis', {}).get('intent', 'unknown')}
+- Complexity: {analysis_context.get('analysis', {}).get('complexity', 'unknown')}
+- Completeness: {analysis_context.get('analysis', {}).get('completeness', 'unknown')}
+
+MISSING REQUIREMENTS:
+{', '.join(analysis_context.get('requirements', {}).get('missing_requirements', []))}
+
+RESEARCH NEEDS:
+{', '.join(analysis_context.get('recommendations', {}).get('research_needs', []))}
+
+CONTEXT NEEDS:
+- Brand Info: {analysis_context.get('context_needs', {}).get('brand_info', False)}
+- References: {analysis_context.get('context_needs', {}).get('references', False)}
+- Research: {analysis_context.get('context_needs', {}).get('research', False)}
+- Competitor Analysis: {analysis_context.get('context_needs', {}).get('competitor_analysis', False)}
+
+Use this analysis to create an intelligent, context-aware workflow that addresses the missing requirements and research needs.
+"""
+        system_prompt += analysis_text
     
     # Add user_id information to the system prompt
     user_id = None
@@ -278,6 +306,17 @@ async def todo_planner(query: str, model_name: Optional[str] = None, chat_llm_mo
                     for item in input_schema_fields:
                         if isinstance(item, dict) and "agent_name" not in item:
                             item["agent_name"] = "todo_planner"
+            
+            # Add session_context to input_schema_fields for todo tools
+            if tool_name in ["manage_todos", "create_todo_list", "update_todo_task_status", "get_next_todo_task", "add_todo_task", "get_chat_todos"] and session_context:
+                if isinstance(input_schema_fields, dict):
+                    input_schema_fields["session_context"] = session_context
+                elif isinstance(input_schema_fields, list):
+                    # Add session_context to the first dict in the list
+                    for item in input_schema_fields:
+                        if isinstance(item, dict):
+                            item["session_context"] = session_context
+                            break
             
             # Call the tool using tool_router
             try:

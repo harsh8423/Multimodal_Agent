@@ -362,6 +362,13 @@ async def manage_todos(action: str, **kwargs) -> Dict[str, Any]:
             result = await todo_manager.create_todo(chat_id, agent_name, tasks, title)
             print(f"📝 create_todo result: {result}")
             
+            # Store todo_id in session context if available
+            session_context = kwargs.get("session_context")
+            if result.get("success") and result.get("todo_id") and session_context:
+                todo_id = result["todo_id"]
+                session_context.set_current_todo_id(todo_id)
+                print(f"🔧 MANAGE_TODOS: Stored todo_id {todo_id} in session context")
+            
             # Verify the saved chat_id
             if result.get("success") and result.get("todo_data"):
                 saved_chat_id = result["todo_data"].get("chat_id")
@@ -378,6 +385,23 @@ async def manage_todos(action: str, **kwargs) -> Dict[str, Any]:
             todo_id = kwargs.get("todo_id")
             step_num = kwargs.get("step_num")
             updates = kwargs.get("updates", {})
+            session_context = kwargs.get("session_context")
+            
+            # If todo_id is not provided, try to get it from session context
+            if not todo_id and session_context:
+                todo_id = session_context.get_current_todo_id()
+                if todo_id:
+                    print(f"🔧 MANAGE_TODOS: Retrieved todo_id {todo_id} from session context")
+                else:
+                    print(f"⚠️ MANAGE_TODOS: No todo_id in session context, trying to find recent todo for chat")
+                    # Try to find the most recent active todo for this chat
+                    chat_id = kwargs.get("chat_id")
+                    if chat_id:
+                        chat_todos = await todo_manager.get_chat_todos(chat_id, status="active")
+                        if chat_todos:
+                            todo_id = str(chat_todos[0]["_id"])
+                            session_context.set_current_todo_id(todo_id)
+                            print(f"🔧 MANAGE_TODOS: Found recent todo_id {todo_id} and stored in session context")
             
             if not todo_id or step_num is None:
                 return {"success": False, "error": "todo_id and step_num are required"}
@@ -396,9 +420,24 @@ async def manage_todos(action: str, **kwargs) -> Dict[str, Any]:
             chat_id = kwargs.get("chat_id")
             todo_id = kwargs.get("todo_id")
             status = kwargs.get("status")
+            session_context = kwargs.get("session_context")
             
             if not chat_id:
                 return {"success": False, "error": "chat_id is required"}
+            
+            # If todo_id is not provided, try to get it from session context
+            if not todo_id and session_context:
+                todo_id = session_context.get_current_todo_id()
+                if todo_id:
+                    print(f"🔧 MANAGE_TODOS: Retrieved todo_id {todo_id} from session context for read action")
+                else:
+                    print(f"⚠️ MANAGE_TODOS: No todo_id in session context, trying to find recent todo for chat")
+                    # Try to find the most recent active todo for this chat
+                    chat_todos = await todo_manager.get_chat_todos(chat_id, status="active")
+                    if chat_todos:
+                        todo_id = str(chat_todos[0]["_id"])
+                        session_context.set_current_todo_id(todo_id)
+                        print(f"🔧 MANAGE_TODOS: Found recent todo_id {todo_id} and stored in session context")
             
             if todo_id:
                 # Get specific todo
@@ -422,6 +461,23 @@ async def manage_todos(action: str, **kwargs) -> Dict[str, Any]:
         elif action == "next_task":
             # Required: todo_id
             todo_id = kwargs.get("todo_id")
+            session_context = kwargs.get("session_context")
+            
+            # If todo_id is not provided, try to get it from session context
+            if not todo_id and session_context:
+                todo_id = session_context.get_current_todo_id()
+                if todo_id:
+                    print(f"🔧 MANAGE_TODOS: Retrieved todo_id {todo_id} from session context for next_task action")
+                else:
+                    print(f"⚠️ MANAGE_TODOS: No todo_id in session context, trying to find recent todo for chat")
+                    # Try to find the most recent active todo for this chat
+                    chat_id = kwargs.get("chat_id")
+                    if chat_id:
+                        chat_todos = await todo_manager.get_chat_todos(chat_id, status="active")
+                        if chat_todos:
+                            todo_id = str(chat_todos[0]["_id"])
+                            session_context.set_current_todo_id(todo_id)
+                            print(f"🔧 MANAGE_TODOS: Found recent todo_id {todo_id} and stored in session context")
             
             if not todo_id:
                 return {"success": False, "error": "todo_id is required"}
@@ -438,6 +494,23 @@ async def manage_todos(action: str, **kwargs) -> Dict[str, Any]:
             # Required: todo_id, task
             todo_id = kwargs.get("todo_id")
             task = kwargs.get("task")
+            session_context = kwargs.get("session_context")
+            
+            # If todo_id is not provided, try to get it from session context
+            if not todo_id and session_context:
+                todo_id = session_context.get_current_todo_id()
+                if todo_id:
+                    print(f"🔧 MANAGE_TODOS: Retrieved todo_id {todo_id} from session context for add_task action")
+                else:
+                    print(f"⚠️ MANAGE_TODOS: No todo_id in session context, trying to find recent todo for chat")
+                    # Try to find the most recent active todo for this chat
+                    chat_id = kwargs.get("chat_id")
+                    if chat_id:
+                        chat_todos = await todo_manager.get_chat_todos(chat_id, status="active")
+                        if chat_todos:
+                            todo_id = str(chat_todos[0]["_id"])
+                            session_context.set_current_todo_id(todo_id)
+                            print(f"🔧 MANAGE_TODOS: Found recent todo_id {todo_id} and stored in session context")
             
             if not todo_id or not task:
                 return {"success": False, "error": "todo_id and task are required"}

@@ -584,7 +584,8 @@ async def asset_manager_chat(
         result = await asset_agent(
             query=enhanced_query,
             user_id=user_id,
-            user_metadata={"selected_brand": selected_brand} if selected_brand else None
+            user_metadata={"selected_brand": selected_brand} if selected_brand else None,
+            session_id=user_id  # Use user_id as session_id for conversation tracking
         )
         
         # Extract response text

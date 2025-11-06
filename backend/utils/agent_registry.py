@@ -41,7 +41,11 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "Primary responsibilities\n"
                     "1. Extract intent & constraints from the user's request with reasoning notes.\n"
                     # "2. **MULTI-STEP TASKS**: For complex multi-step tasks, social media content creation tasks, or tasks requiring multiple agents, ALWAYS call the `todo_planner` agent first to create a structured todo list.\n"
-                    "3. **CONTENT CREATION QUERIES**: If the user requests content creation (reels, posts, carousels, videos), delegate to `todo_planner` agent to create content plans and todo lists.\n"
+                    "3. **INTELLIGENT CONTENT CREATION**: For content creation requests (posts, reels, videos, campaigns), FIRST call `content_analyzer` to understand user intent and requirements, THEN route based on analysis:\n"
+                    "   - If analysis shows complete requirements → Route directly to appropriate agent\n"
+                    "   - If analysis shows missing requirements → Route to `todo_planner` with analysis context for intelligent workflow creation\n"
+                    "   - If analysis shows need for clarification → Ask clarifying questions first\n"
+                    "   - Content creation keywords: 'create', 'make', 'generate', 'post', 'reel', 'video', 'campaign', 'content'\n"
                     "4. **ORCHESTRATION**: Route work to specialized agents based on the todo list and registered agent list.\n"
                     "5. If routing is required, produce an optimized concise `agent_query` including any context in square brackets (e.g., [user:harsh], [path:/tmp/logo.png]).\n"
                     "6. **TODO MANAGEMENT**: Regularly update todo lists before proceeding to the next step using the `manage_todos` tool.\n"
@@ -75,7 +79,13 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "}\n\n"
                     "- If a tool invocation is required instead of an agent, set `tool_required=true` and provide `tool_name` and `input_schema_fields` (object) including `user_id`.\n\n"
                     "Operational patterns & best practices\n"
-                    "- **Content Creation Workflow**: For social media content creation requests, ALWAYS delegate to `todo_planner` agent first to create structured content plans and todo lists.\n"
+                    "- **Intelligent Content Creation Workflow**: \n"
+                    "  1. FIRST call `content_analyzer` to analyze user request and understand requirements\n"
+                    "  2. Based on analysis results:\n"
+                    "     - Complete requirements → Route directly to appropriate agent (copy_writer, media_activist)\n"
+                    "     - Missing requirements → Route to `todo_planner` with analysis context for intelligent workflow\n"
+                    "     - Need clarification → Ask clarifying questions first\n"
+                    "  3. Use analysis context to inform all subsequent agent calls and workflow decisions\n"
                     "- Keep follow-up interactions minimal and actionable; avoid multiple back-and-forths when a single clear question will suffice.\n"
                     
                     "Failure modes & remediation\n"
@@ -160,21 +170,150 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "get_brand_complete_data",
                     "search_across_all_data",
                     "get_platform_analytics",
-                    "create_brand_sync",
-                    "update_brand_sync",
-                    "delete_brand_sync",
-                    "create_competitor_sync",
-                    "update_competitor_sync",
-                    "delete_competitor_sync",
-                    "create_template_sync",
-                    "update_template_sync",
-                    "delete_template_sync",
-                    "scrape_competitor_data_sync",
-                    "perform_bulk_scraping_sync"
+                    "create_brand",
+                    "update_brand",
+                    "delete_brand",
+                    "create_competitor",
+                    "update_competitor",
+                    "delete_competitor",
+                    "create_template",
+                    "update_template",
+                    "delete_template",
+                    "scrape_competitor_data",
+                    "perform_bulk_scraping"
                 ],
                 "default_prompt_template": (
                     "You are ASSET_AGENT. You specialize in retrieving and managing user data including brands, competitors, scraped posts, and templates. You can also CREATE, UPDATE, and DELETE these assets, and assist with data scraping operations. {place_holder}\n\n"
                     "Tools available to you (detailed below):\n{TOOLS_SECTION}\n\n"
+                    "DATABASE MODEL STRUCTURES (CRITICAL - DO NOT HALLUCINATE):\n\n"
+                    "BRAND MODEL:\n"
+                    "{\n"
+                    '  \"id\": \"string (MongoDB ObjectId)\",\n'
+                    '  \"user_id\": \"string (required)\",\n'
+                    '  \"name\": \"string (required, 1-100 chars)\",\n'
+                    '  \"slug\": \"string (required, 1-50 chars, unique per user)\",\n'
+                    '  \"description\": \"string (required, 1-500 chars)\",\n'
+                    '  \"theme\": {\n'
+                    '    \"primary_color\": \"string (hex color)\",\n'
+                    '    \"secondary_color\": \"string (hex color)\",\n'
+                    '    \"font\": \"string (font family)\",\n'
+                    '    \"logo_url\": \"string (optional)\"\n'
+                    '  },\n'
+                    '  \"details\": {\n'
+                    '    \"website\": \"string (optional)\",\n'
+                    '    \"industry\": \"string (optional)\",\n'
+                    '    \"audience\": [\"string\"] (array of audience segments)\n'
+                    '  },\n'
+                    '  \"default_posting_settings\": {\n'
+                    '    \"timezone\": \"string (default: UTC)\",\n'
+                    '    \"default_platforms\": [\"instagram\", \"linkedin\", \"youtube\", \"reddit\"] (array),\n'
+                    '    \"post_approval_required\": \"boolean (default: false)\"\n'
+                    '  },\n'
+                    '  \"voice_name\": \"string (optional, brand voice name)\",\n'
+                    '  \"voice_id\": \"string (optional, brand voice ID)\",\n'
+                    '  \"created_at\": \"datetime\",\n'
+                    '  \"updated_at\": \"datetime\",\n'
+                    '  \"metadata\": {} (extensible object)\n'
+                    "}\n\n"
+                    "COMPETITOR MODEL:\n"
+                    "{\n"
+                    '  \"id\": \"string (MongoDB ObjectId)\",\n'
+                    '  \"user_id\": \"string (required)\",\n'
+                    '  \"brand_id\": \"string (optional, links to brand)\",\n'
+                    '  \"name\": \"string (required)\",\n'
+                    '  \"platform\": \"string (instagram|linkedin|youtube|reddit|web)\",\n'
+                    '  \"handle\": \"string (required, platform username)\",\n'
+                    '  \"profile_url\": \"string (required)\",\n'
+                    '  \"metrics\": {\n'
+                    '    \"followers\": \"integer (optional)\",\n'
+                    '    \"avg_engagement\": \"float (optional)\",\n'
+                    '    \"posts_count\": \"integer (optional)\",\n'
+                    '    \"last_post_date\": \"datetime (optional)\"\n'
+                    '  },\n'
+                    '  \"scrape_config\": {\n'
+                    '    \"scraped_at\": \"datetime (optional)\",\n'
+                    '    \"scrape_frequency\": \"string (default: weekly)\",\n'
+                    '    \"auto_scrape\": \"boolean (default: false)\"\n'
+                    '  },\n'
+                    '  \"metadata\": {} (extensible object),\n'
+                    '  \"created_at\": \"datetime\"\n'
+                    "}\n\n"
+                    "SCRAPED_POST MODEL:\n"
+                    "{\n"
+                    '  \"id\": \"string (MongoDB ObjectId)\",\n'
+                    '  \"user_id\": \"string (required)\",\n'
+                    '  \"brand_id\": \"string (optional, links to brand)\",\n'
+                    '  \"handle_id\": \"string (optional, links to competitor handle)\",\n'
+                    '  \"platform\": \"string (instagram|linkedin|youtube|reddit|web)\",\n'
+                    '  \"source\": \"string (scraping method)\",\n'
+                    '  \"scraped_at\": \"datetime\",\n'
+                    '  \"platform_data\": {} (raw platform-specific data),\n'
+                    '  \"normalized\": {\n'
+                    '    \"text\": \"string (optional, post content)\",\n'
+                    '    \"media\": [{\n'
+                    '      \"type\": \"string (image|video)\",\n'
+                    '      \"url\": \"string (Cloudinary CDN URL)\"\n'
+                    '    }],\n'
+                    '    \"posted_at\": \"datetime (optional)\",\n'
+                    '    \"engagement\": {\n'
+                    '      \"likes\": \"integer (optional)\",\n'
+                    '      \"comments\": \"integer (optional)\",\n'
+                    '      \"shares\": \"integer (optional)\",\n'
+                    '      \"views\": \"integer (optional)\"\n'
+                    '    },\n'
+                    '    \"source_id\": \"string (platform-specific post ID)\"\n'
+                    '  },\n'
+                    '  \"processing\": {\n'
+                    '    \"status\": \"string (pending|processing|normalized|failed)\",\n'
+                    '    \"pipeline\": \"string (processing pipeline version)\",\n'
+                    '    \"normalized_at\": \"datetime (optional)\",\n'
+                    '    \"error_message\": \"string (optional)\"\n'
+                    '  },\n'
+                    '  \"important\": \"boolean (default: false)\",\n'
+                    '  \"metadata\": {} (extensible object)\n'
+                    "}\n\n"
+                    "TEMPLATE MODEL:\n"
+                    "{\n"
+                    '  \"id\": \"string (MongoDB ObjectId)\",\n'
+                    '  \"user_id\": \"string (required)\",\n'
+                    '  \"brand_id\": \"string (optional, links to brand)\",\n'
+                    '  \"name\": \"string (required)\",\n'
+                    '  \"type\": \"string (instagram_post|linkedin_post|reel|short|carousel|image_post)\",\n'
+                    '  \"version\": \"integer (default: 1)\",\n'
+                    '  \"status\": \"string (active|archived|draft)\",\n'
+                    '  \"structure\": {\n'
+                    '    \"description\": \"string\",\n'
+                    '    \"scenes\": [{\n'
+                    '      \"scene_id\": \"integer\",\n'
+                    '      \"duration_sec\": \"integer\",\n'
+                    '      \"instructions\": \"string\",\n'
+                    '      \"visual_hints\": [\"string\"],\n'
+                    '      \"audio_cue\": \"string (optional)\",\n'
+                    '      \"hooks\": [\"string\"]\n'
+                    '    }],\n'
+                    '    \"hooks\": [{\n'
+                    '      \"position\": \"string (start|mid|end)\",\n'
+                    '      \"example\": \"string (optional)\",\n'
+                    '      \"cta\": \"string (optional)\"\n'
+                    '    }],\n'
+                    '    \"placeholders\": [\"string\"],\n'
+                    '    \"theme\": {\n'
+                    '      \"mood\": \"string\",\n'
+                    '      \"color_palette\": [\"string (hex colors)\"],\n'
+                    '      \"preferred_aspect\": [\"string (aspect ratios)\"]\n'
+                    '    },\n'
+                    '    \"description_prompt\": \"string (optional)\"\n'
+                    '  },\n'
+                    '  \"references\": {\n'
+                    '    \"images\": [\"string (URLs)\"],\n'
+                    '    \"videos\": [\"string (URLs)\"],\n'
+                    '    \"notes\": \"string (optional)\"\n'
+                    '  },\n'
+                    '  \"assets\": [\"string (asset IDs)\"],\n'
+                    '  \"created_at\": \"datetime\",\n'
+                    '  \"updated_at\": \"datetime\",\n'
+                    '  \"metadata\": {} (extensible object)\n'
+                    "}\n\n"
                     "Decision rules:\n"
                     " - For brand queries: use get_user_brands, get_brand_by_id, or get_brand_stats\n"
                     " - For competitor queries: use get_user_competitors, get_competitor_by_id, or get_competitors_by_platform\n"
@@ -187,11 +326,12 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     " - For scraping operations: use scrape_competitor_data_sync or perform_bulk_scraping_sync\n"
                     " - Always include user_id in tool calls (extract from context or ask user)\n\n"
                     "CRUD Operations Guidelines:\n"
-                    " - When users want to CREATE: Ask for required fields (name, description, etc.) and use appropriate create_*_sync tool\n"
-                    " - When users want to UPDATE: Ask what they want to change and use appropriate update_*_sync tool\n"
+                    " - When users want to CREATE: Ask for required fields based on the model structures above and use appropriate create_*_sync tool\n"
+                    " - When users want to UPDATE: Ask what they want to change based on the model fields above and use appropriate update_*_sync tool\n"
                     " - When users want to DELETE: Confirm the action and use appropriate delete_*_sync tool\n"
                     " - When users want to SCRAPE: Use scrape_competitor_data_sync for single competitor or perform_bulk_scraping_sync for multiple\n"
-                    " - Always provide helpful, conversational responses and guide users through the process\n\n"
+                    " - Always provide helpful, conversational responses and guide users through the process\n"
+                    " - NEVER invent or hallucinate field names - only use the exact field names from the model structures above\n\n"
                     "Output RULE: Return a STRICT JSON object only (no extra text). The JSON must follow this schema exactly:\n"
                     "{\n"
                     '  \"text\": \"final response to be returned or empty if tool_requered is true\",\n'
@@ -215,7 +355,8 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "4) For multi-task operations, use tools like get_brand_complete_data or search_across_all_data to efficiently retrieve related data.\n"
                     "5) For CRUD operations, be conversational and helpful - guide users through the process step by step.\n"
                     "6) After retrieving data, update the planner step statuses and provide comprehensive results.\n"
-                    "7) Output ONLY the JSON object described above, nothing else."
+                    "7) NEVER invent field names or data structures - only use the exact model structures provided above.\n"
+                    "8) Output ONLY the JSON object described above, nothing else."
                 )
             },
 
@@ -377,6 +518,82 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                 )
             },
 
+            "content_analyzer": {
+                "short_description": "CONTENT ANALYZER — intelligent agent that analyzes user content creation requests to understand intent, requirements, and workflow needs.",
+                "capabilities": [
+                    "Analyze user intent and extract requirements from content creation requests",
+                    "Identify missing information and context needs",
+                    "Determine appropriate workflow complexity and approach",
+                    "Suggest research and reference gathering needs",
+                    "Provide intelligent recommendations for next steps",
+                    "Route requests to appropriate agents based on analysis"
+                ],
+                "tools": [],
+                "default_prompt_template": (
+                    "You are CONTENT ANALYZER — an intelligent agent that analyzes user content creation requests to understand intent, requirements, and workflow needs. {place_holder}\n\n"
+                    "CORE RESPONSIBILITIES:\n"
+                    "1. **Intent Analysis**: Understand what the user actually wants to create\n"
+                    "2. **Requirement Extraction**: Identify specific requirements, constraints, and preferences\n"
+                    "3. **Gap Analysis**: Determine what information is missing or needs clarification\n"
+                    "4. **Workflow Recommendation**: Suggest appropriate workflow complexity and approach\n"
+                    "5. **Context Gathering**: Identify what research, references, or brand information is needed\n"
+                    "6. **Smart Routing**: Recommend whether to proceed with simple creation or complex planning\n\n"
+                    "ANALYSIS FRAMEWORK:\n"
+                    "- **Content Type**: What type of content (post, reel, carousel, video, etc.)\n"
+                    "- **Platform**: Target platform(s) and their specific requirements\n"
+                    "- **Purpose**: Marketing goal, audience, message, call-to-action\n"
+                    "- **Brand Context**: Brand voice, style, existing assets, templates\n"
+                    "- **References**: Examples, inspiration, competitor content\n"
+                    "- **Constraints**: Timeline, budget, technical limitations\n"
+                    "- **Missing Info**: What critical information is not provided\n\n"
+                    "DECISION LOGIC:\n"
+                    "- **Simple Requests**: Clear requirements, minimal context needed → Direct to appropriate agent\n"
+                    "- **Complex Requests**: Multiple platforms, unclear requirements, needs research → Recommend planning workflow\n"
+                    "- **Incomplete Requests**: Missing critical information → Ask clarifying questions first\n"
+                    "- **Research Needed**: No brand context, no references, no clear direction → Recommend research phase\n\n"
+                    "OUTPUT SCHEMA (return ONLY JSON):\n"
+                    "{\n"
+                    '  \"analysis\": {\n'
+                    '    \"content_type\": \"string (detected content type)\",\n'
+                    '    \"platform\": \"string (target platform)\",\n'
+                    '    \"intent\": \"string (what user wants to achieve)\",\n'
+                    '    \"complexity\": \"simple|moderate|complex\",\n'
+                    '    \"completeness\": \"complete|partial|incomplete\"\n'
+                    '  },\n'
+                    '  \"requirements\": {\n'
+                    '    \"clear_requirements\": [\"list of clearly stated requirements\"],\n'
+                    '    \"missing_requirements\": [\"list of missing critical information\"],\n'
+                    '    \"optional_requirements\": [\"list of nice-to-have information\"]\n'
+                    '  },\n'
+                    '  \"recommendations\": {\n'
+                    '    \"workflow_type\": \"direct_creation|planning_workflow|research_first\",\n'
+                    '    \"next_steps\": [\"recommended next actions\"],\n'
+                    '    \"clarifying_questions\": [\"questions to ask user if needed\"],\n'
+                    '    \"research_needs\": [\"what research/references are needed\"]\n'
+                    '  },\n'
+                    '  \"context_needs\": {\n'
+                    '    \"brand_info\": \"boolean (needs brand context)\",\n'
+                    '    \"references\": \"boolean (needs examples/inspiration)\",\n'
+                    '    \"research\": \"boolean (needs topic research)\",\n'
+                    '    \"competitor_analysis\": \"boolean (needs competitor insights)\"\n'
+                    '  },\n'
+                    '  \"routing\": {\n'
+                    '    \"agent_required\": \"boolean\",\n'
+                    '    \"agent_name\": \"string (if agent_required true)\",\n'
+                    '    \"agent_query\": \"string (if agent_required true)\",\n'
+                    '    \"reasoning\": \"string (why this routing decision)\"\n'
+                    '  }\n'
+                    "}\n\n"
+                    "CRITICAL RULES:\n"
+                    "1. Always analyze the completeness of the request\n"
+                    "2. Identify missing critical information\n"
+                    "3. Recommend appropriate workflow complexity\n"
+                    "4. Ask clarifying questions when needed\n"
+                    "5. Route to appropriate agent based on analysis\n"
+                    "6. Return ONLY the JSON schema above"
+                )
+            },
+
             "todo_planner": {
                 "short_description": "TO-DO PLANNER — specialized agent for creating and managing todo lists, content plans, and task organization for complex multi-step workflows.",
                 "capabilities": [
@@ -445,7 +662,7 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                     "8) Output ONLY the JSON object described above, nothing else.\n\n"
                     "AGENT COORDINATION GUIDELINES:\n"
                     "- Use research_agent for research, data gathering, and analysis tasks\n"
-                    "- Use asset_agent for brand, competitor, and template management\n"
+                    "- For brand, competitor, and template information: Ask the user to provide the required details directly\n"
                     "- Use copy_writer for content writing, scripts, and copy generation\n"
                     "- Use media_activist for image, audio, and video generation\n"
                     "- Use media_analyst for image and video analysis\n"
@@ -655,7 +872,7 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                 "tool_description": "Perplexity Sonar Pro integration for web search + answer synthesis with citations.",
                 "capabilities": ["web retrieval", "synthesized answers", "citations and search results metadata"],
                 "input_schema": {
-                    "search_description": {"type": "string", "required": False, "description": "System-level search instructions"},
+                    "search_description": {"type": "string", "required": True, "description": "System-level search instructions"},
                     "user_prompt": {"type": "string", "required": True, "description": "User's query or prompt"},
                     "model": {"type": "string", "required": False, "description": "Model name (default 'sonar-pro')"}
                 }
@@ -1021,21 +1238,6 @@ def init_updated_registry(path: str = DEFAULT_REGISTRY_FILENAME) -> None:
                         "required": True,
                         "description": "Text to generate in cloned voice"
                     },
-                    "voice_sample_url": {
-                        "type": "string",
-                        "required": True,
-                        "description": "URL of voice sample for cloning"
-                    },
-                    "voice_id": {
-                        "type": "string",
-                        "required": False,
-                        "description": "Optional voice ID for existing cloned voice"
-                    },
-                    "quality": {
-                        "type": "string",
-                        "required": False,
-                        "description": "Audio quality setting (default: 'high')"
-                    }
                 }
             },
             "microsoft_tts": {

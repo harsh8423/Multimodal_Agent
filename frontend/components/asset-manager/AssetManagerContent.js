@@ -4,13 +4,17 @@ import { useState, useEffect } from 'react';
 import { brandsAPI, templatesAPI, competitorsAPI, scrapedPostsAPI, scrapingAPI } from '@/lib/api/socialMedia';
 
 // Import existing tab components
-import BrandsTab from '@/components/asset-manager/BrandsTab';
 import TemplatesTab from '@/components/asset-manager/TemplatesTab';
 import CompetitorsTab from '@/components/asset-manager/CompetitorsTab';
 import ScrapedPostsTab from '@/components/asset-manager/ScrapedPostsTab';
 import ScrapingTab from '@/components/asset-manager/ScrapingTab';
 
-const AssetManagerContent = ({ selectedBrand, selectedSection, onDataUpdate }) => {
+// Import form components
+import BrandForm from '@/components/asset-manager/BrandForm';
+import CompetitorForm from '@/components/asset-manager/CompetitorForm';
+import TemplateForm from '@/components/asset-manager/TemplateForm';
+
+const AssetManagerContent = ({ selectedBrand, selectedSection, onDataUpdate, activeForm, onFormClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({
@@ -19,11 +23,28 @@ const AssetManagerContent = ({ selectedBrand, selectedSection, onDataUpdate }) =
     scrapedPosts: 0,
   });
 
+  // Form state management
+  const [formData, setFormData] = useState(null);
+  const [brands, setBrands] = useState([]);
+
   useEffect(() => {
     if (selectedBrand) {
       loadBrandStats();
     }
   }, [selectedBrand]);
+
+  useEffect(() => {
+    loadBrands();
+  }, []);
+
+  const loadBrands = async () => {
+    try {
+      const response = await brandsAPI.getAll({ limit: 100 });
+      setBrands(response.brands || []);
+    } catch (err) {
+      console.error('Failed to load brands:', err);
+    }
+  };
 
   const loadBrandStats = async () => {
     if (!selectedBrand) return;
@@ -46,6 +67,54 @@ const AssetManagerContent = ({ selectedBrand, selectedSection, onDataUpdate }) =
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Form handlers
+  const handleFormOpen = (formType, data = null) => {
+    console.log('Opening form:', formType, data);
+    setFormData(data);
+    // Call parent's onDataUpdate to set activeForm
+    if (onDataUpdate) {
+      onDataUpdate(formType);
+    }
+  };
+
+  const handleFormClose = () => {
+    if (onFormClose) {
+      onFormClose();
+    }
+    setFormData(null);
+  };
+
+  const handleFormSubmit = async (data) => {
+    try {
+      if (activeForm === 'brand') {
+        if (formData) {
+          await brandsAPI.update(formData.id, data);
+        } else {
+          await brandsAPI.create(data);
+        }
+      } else if (activeForm === 'competitor') {
+        if (formData) {
+          await competitorsAPI.update(formData.id, data);
+        } else {
+          await competitorsAPI.create(data);
+        }
+      } else if (activeForm === 'template') {
+        if (formData) {
+          await templatesAPI.update(formData.id, data);
+        } else {
+          await templatesAPI.create(data);
+        }
+      }
+      
+      handleFormClose();
+      loadBrandStats();
+      onDataUpdate?.();
+    } catch (err) {
+      console.error('Failed to submit form:', err);
+      throw err;
     }
   };
 
@@ -149,9 +218,9 @@ const AssetManagerContent = ({ selectedBrand, selectedSection, onDataUpdate }) =
     // Render the appropriate component based on selected section
     switch (selectedSection) {
       case 'templates':
-        return <TemplatesTab onUpdate={loadBrandStats} brandId={selectedBrand.id} />;
+        return <TemplatesTab onUpdate={loadBrandStats} brandId={selectedBrand.id} onFormOpen={handleFormOpen} />;
       case 'competitors':
-        return <CompetitorsTab onUpdate={loadBrandStats} brandId={selectedBrand.id} />;
+        return <CompetitorsTab onUpdate={loadBrandStats} brandId={selectedBrand.id} onFormOpen={handleFormOpen} />;
       case 'scraped-posts':
         return <ScrapedPostsTab onUpdate={loadBrandStats} brandId={selectedBrand.id} />;
       case 'scraping':
@@ -169,8 +238,31 @@ const AssetManagerContent = ({ selectedBrand, selectedSection, onDataUpdate }) =
     }
   };
 
+  // Render form if active
+  const renderForm = () => {
+    if (!activeForm) return null;
+
+    console.log('Rendering form:', activeForm, formData);
+
+    const commonProps = {
+      onSubmit: handleFormSubmit,
+      onClose: handleFormClose,
+    };
+
+    switch (activeForm) {
+      case 'brand':
+        return <BrandForm brand={formData} {...commonProps} />;
+      case 'competitor':
+        return <CompetitorForm competitor={formData} brands={brands} {...commonProps} />;
+      case 'template':
+        return <TemplateForm template={formData} brands={brands} {...commonProps} />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="flex-1 flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
+    <>
       {/* Error Message */}
       {error && (
         <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4 animate-fade-in">
@@ -191,10 +283,18 @@ const AssetManagerContent = ({ selectedBrand, selectedSection, onDataUpdate }) =
       )}
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto p-6">
-        {renderContent()}
-      </div>
-    </div>
+      {activeForm ? (
+        <div className="flex-1 flex flex-col">
+          {renderForm()}
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
+          <div className="flex-1 overflow-auto p-6">
+            {renderContent()}
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
