@@ -1,0 +1,52 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Pytest cache
+.pytest_cache/
+.cache/
+
+# Test directory
+test/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+log/
+logs/
+
+# Local uploads (will be mounted as volume)
+uploads/
+
+# Environment files (injected at runtime)
+.env
+.env.*
+
+# Git & IDE
+.git/
+.gitignore
+.cursor/
+
+# Large binary files used for testing
+my_downloads/
+response.json
+
+# VS Code
+.vscode/
+
+# Documentation
+*.md

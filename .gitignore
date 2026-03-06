@@ -10,3 +10,4 @@ utility/
 __pycache__/
 *.pyc
 service_account.json
+.cursor

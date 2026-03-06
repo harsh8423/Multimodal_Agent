@@ -1,0 +1,39 @@
+# Git metadata
+.git/
+.gitignore
+
+# IDE / editor config
+.cursor/
+.vscode/
+
+# Environment files with real secrets
+**/.env
+**/.env.local
+**/.env.*
+!.env.example
+
+# Node modules (each service builds its own)
+**/node_modules/
+
+# Python cache
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+
+# Next.js build
+**/. next/
+**/out/
+**/dist/
+**/build/
+
+# Logs
+**/*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Media test files
+utility/*.jpeg
+utility/*.png
+utility/*.jpg
